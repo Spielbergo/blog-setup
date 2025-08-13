@@ -17,7 +17,7 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: 'https://blog-setup.onrender.com',
   credentials: true
 }));
 app.use(express.json());
@@ -29,10 +29,15 @@ app.use(session({
   saveUninitialized: true,
 }));
 
+// Server Status
+app.get('/', (req, res) => {
+  res.send('Blog Silo Setup API is running.');
+});
+
 // Google OAuth2 client setup
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4000/api/auth/google/callback';
+const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'https://blog-setup-server.onrender.com/api/auth/google/callback';
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
 function getOAuth2Client(req) {

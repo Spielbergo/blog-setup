@@ -11,7 +11,7 @@ const PAAFetcher = ({ topic }) => {
   useEffect(() => {
     async function checkAuth() {
       try {
-        const res = await fetch('http://localhost:4000/api/auth/status', { credentials: 'include' });
+        const res = await fetch('https://blog-setup-server.onrender.com/api/auth/status', { credentials: 'include' });
         if (res.ok) {
           const data = await res.json();
           setIsGoogleAuthed(data.authed);
@@ -30,12 +30,12 @@ const PAAFetcher = ({ topic }) => {
 
   // Sign in handler
   const handleGoogleSignIn = () => {
-    window.open('http://localhost:4000/api/auth/google', '_blank', 'width=500,height=600');
+    window.open('https://blog-setup-server.onrender.com/api/auth/google', '_blank', 'width=500,height=600');
   };
 
   // Sign out handler
   const handleGoogleSignOut = async () => {
-    await fetch('http://localhost:4000/api/auth/logout', { method: 'POST', credentials: 'include' });
+    await fetch('https://blog-setup-server.onrender.com/api/auth/logout', { method: 'POST', credentials: 'include' });
     setIsGoogleAuthed(false);
     setUserName('');
   };
@@ -88,7 +88,7 @@ const PAAFetcher = ({ topic }) => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('http://localhost:4000/api/paa', {
+      const res = await fetch('https://blog-setup-server.onrender.com/api/paa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keyword: topic, depth, maxQuestions })
