@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "express-session": "^1.18.2",
     "googleapis": "^156.0.0",
     "node": "^22.18.0",
