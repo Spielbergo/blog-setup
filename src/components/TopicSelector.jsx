@@ -80,9 +80,22 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
         placeholder="Enter main topic (e.g., lipstick)"
         style={{ width: '280px', marginRight: '1rem' }}
       />
-      <button className="btn" onClick={handleSuggest} disabled={!mainTopic || loading}>
+      <button className="btn" onClick={handleSuggest} disabled={!mainTopic || loading} style={{ minWidth: '180px' }}>
         {loading ? 'Suggesting...' : 'Suggest Related Topics'}
       </button>
+      {loading && (
+        <div style={{ marginTop: '2.5rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'center' }}>
+          <span className="loader-spinner" style={{
+            display: 'inline-block',
+            width: '32px',
+            height: '32px',
+            border: '4px solid #4285F4',
+            borderTop: '4px solid #22242c',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+          }}></span>
+        </div>
+      )}
       {error && <div style={{ color: 'red', marginTop: '1rem' }}>{error}</div>}
       {relatedTopics.length > 0 && (
         <div style={{ marginTop: '1rem', overflowX: 'auto' }}>
