@@ -1,3 +1,33 @@
+/* Keyword table styles */
+.kw-table {
+  width: 100%;
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 1rem;
+  box-shadow: 0 1px 8px rgba(0,0,0,0.08);
+  margin-top: 1rem;
+}
+.kw-table th, .kw-table td {
+  padding: 0.5rem 1rem;
+  text-align: left;
+}
+.kw-table th {
+  background: var(--color-card);
+  color: var(--color-accent);
+  font-weight: 500;
+  border-bottom: 2px solid var(--color-border);
+  user-select: none;
+}
+.kw-table tr {
+  transition: background 0.2s;
+}
+.kw-table tbody tr:hover {
+  background: #22242c;
+}
+.kw-table td {
+  border-bottom: 1px solid var(--color-border);
+}
 /* Three column dashboard layout */
 .dashboard-three-cols {
   display: flex;

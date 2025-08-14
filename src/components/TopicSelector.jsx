@@ -6,8 +6,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
   const [mainTopic, setMainTopic] = useState('');
   const [relatedTopics, setRelatedTopics] = useState([]);
-  const defaultApiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
-  const [apiKey, setApiKey] = useState(defaultApiKey);
+  const [sortBy, setSortBy] = useState('keyword');
+  const [sortDir, setSortDir] = useState('asc');
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -39,9 +40,6 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
     setMainTopic(e.target.value);
   };
 
-  const handleApiKeyChange = (e) => {
-    setApiKey(e.target.value);
-  };
 
   const handleSuggest = () => {
     if (!apiKey) {
@@ -52,6 +50,26 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
     if (onTopicSelected) onTopicSelected(mainTopic);
   };
 
+  // Sorting logic for related topics
+  const sortedTopics = [...relatedTopics].sort((a, b) => {
+    let valA = a[sortBy] ?? '';
+    let valB = b[sortBy] ?? '';
+    if (typeof valA === 'string') valA = valA.toLowerCase();
+    if (typeof valB === 'string') valB = valB.toLowerCase();
+    if (valA < valB) return sortDir === 'asc' ? -1 : 1;
+    if (valA > valB) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const handleSort = col => {
+    if (sortBy === col) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(col);
+      setSortDir('asc');
+    }
+  };
+
   return (
     <div style={{ marginTop: '2rem' }}>
       <h2>Select Main Topic</h2>
@@ -60,35 +78,45 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
         value={mainTopic}
         onChange={handleTopicChange}
         placeholder="Enter main topic (e.g., lipstick)"
-        style={{ width: '300px', marginRight: '1rem' }}
+        style={{ width: '280px', marginRight: '1rem' }}
       />
-      <div style={{ margin: '1rem 0' }}>
-        <input
-          type="password"
-          value={apiKey}
-          onChange={handleApiKeyChange}
-          placeholder="Gemini API Key"
-          style={{ width: '300px', marginRight: '1rem' }}
-        />
-        <span style={{ fontSize: '0.9em', color: '#888' }}>Required for AI suggestions</span>
-      </div>
-      <button onClick={handleSuggest} disabled={!mainTopic || !apiKey || loading}>
+      <button className="btn" onClick={handleSuggest} disabled={!mainTopic || loading}>
         {loading ? 'Suggesting...' : 'Suggest Related Topics'}
       </button>
       {error && <div style={{ color: 'red', marginTop: '1rem' }}>{error}</div>}
       {relatedTopics.length > 0 && (
-        <div style={{ marginTop: '1rem' }}>
+        <div style={{ marginTop: '1rem', overflowX: 'auto' }}>
           <h3>Related Topics</h3>
-          <ul>
-            {relatedTopics.map((item, idx) => (
-              <li key={idx} style={{ marginBottom: '0.5rem' }}>
-                {item.keyword} ({item.volume.toLocaleString()})
-                <button style={{ marginLeft: '1rem' }} onClick={() => onTopicSelected(item.keyword)}>
-                  Select & Run PAA
-                </button>
-              </li>
-            ))}
-          </ul>
+          <table className="kw-table" style={{ width: '100%', borderCollapse: 'collapse', background: 'var(--color-surface)' }}>
+            <thead>
+              <tr>
+                <th style={{ cursor: 'pointer' }} onClick={() => handleSort('keyword')}>
+                  Topic {sortBy === 'keyword' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                </th>
+                <th style={{ cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('volume')}>
+                  Search Volume {sortBy === 'volume' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                </th>
+                <th style={{ cursor: 'pointer' }} onClick={() => handleSort('kd')}>
+                  KD {sortBy === 'kd' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                </th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedTopics.map((item, idx) => (
+                <tr key={idx} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  <td style={{ padding: '0.5rem 1rem' }}>{item.keyword}</td>
+                  <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>{item.volume.toLocaleString()}</td>
+                  <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>{item.kd !== null && item.kd !== undefined ? item.kd : '-'}</td>
+                  <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>
+                    <button className="btn" onClick={() => onTopicSelected(item.keyword)}>
+                      Select
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
