@@ -48,6 +48,9 @@ const Navbar = () => {
 
   return (
     <div style={navbarStyle}>
+        <div style={{ flexGrow: 1, textAlign: 'left', color: 'white', fontSize: '1.2rem', fontWeight: 'bold' }}>
+          Blog Silo Setup Tool
+          </div>
       {!isGoogleAuthed ? (
         <button onClick={handleGoogleSignIn} style={{ fontWeight: 'bold', padding: '0.5rem 1rem', borderRadius: '20px', background: '#4285F4', color: 'white', border: 'none', cursor: 'pointer' }}>Sign in with Google</button>
       ) : (
