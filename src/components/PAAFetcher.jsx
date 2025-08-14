@@ -3,42 +3,6 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 
 const PAAFetcher = ({ topic }) => {
-  // Google OAuth state
-  const [isGoogleAuthed, setIsGoogleAuthed] = useState(false);
-  const [userName, setUserName] = useState('');
-
-  // Check auth status on mount
-  useEffect(() => {
-    async function checkAuth() {
-      try {
-        const res = await fetch('https://blog-setup-server.onrender.com/api/auth/status', { credentials: 'include' });
-        if (res.ok) {
-          const data = await res.json();
-          setIsGoogleAuthed(data.authed);
-          setUserName(data.name || '');
-        } else {
-          setIsGoogleAuthed(false);
-          setUserName('');
-        }
-      } catch {
-        setIsGoogleAuthed(false);
-        setUserName('');
-      }
-    }
-    checkAuth();
-  }, []);
-
-  // Sign in handler
-  const handleGoogleSignIn = () => {
-    window.open('https://blog-setup-server.onrender.com/api/auth/google', '_blank', 'width=500,height=600');
-  };
-
-  // Sign out handler
-  const handleGoogleSignOut = async () => {
-    await fetch('https://blog-setup-server.onrender.com/api/auth/logout', { method: 'POST', credentials: 'include' });
-    setIsGoogleAuthed(false);
-    setUserName('');
-  };
   // Get API key from .env
   const sheetApiKey = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY || '';
   const sheetId1 = import.meta.env.VITE_GOOGLE_SHEETS_SHEET_ID_1 || '';
@@ -386,33 +350,9 @@ const PAAFetcher = ({ topic }) => {
     URL.revokeObjectURL(url);
   }
 
-  // Top bar UI
-  const topBarStyle = {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    padding: '1rem',
-    borderBottom: '1px solid #eee',
-    marginBottom: '2rem',
-    minHeight: '48px',
-    background: '#fafafa',
-  };
 
   return (
-    <>
-      <div style={topBarStyle}>
-        {!isGoogleAuthed ? (
-          <button onClick={handleGoogleSignIn} style={{ fontWeight: 'bold', padding: '0.5rem 1rem', borderRadius: '20px', background: '#4285F4', color: 'white', border: 'none', cursor: 'pointer' }}>Sign in with Google</button>
-        ) : (
-          <>
-            <button onClick={handleGoogleSignOut} style={{ marginRight: '1rem', padding: '0.5rem 1rem', borderRadius: '20px', background: '#eee', color: '#333', border: 'none', cursor: 'pointer' }}>Sign out</button>
-            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#4285F4', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '1.2rem' }}>
-              {userName ? userName.charAt(0).toUpperCase() : '?'}
-            </div>
-          </>
-        )}
-      </div>
-      <div style={{ marginTop: '2rem' }}>
+    <div style={{ marginTop: '2rem' }}>
       <h2>People Also Ask (PAA) Questions</h2>
       <div style={{ marginBottom: '1rem' }}>
         <label style={{ marginRight: '1rem' }}>
@@ -505,7 +445,6 @@ const PAAFetcher = ({ topic }) => {
       )}
       {error && <div style={{ color: 'red' }}>{error}</div>}
     </div>
-    </>
   );
 };
 
