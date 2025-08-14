@@ -514,7 +514,97 @@ if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
           Show Full Prefiltered PAA List
         </button>
       </div>
-      {Object.keys(wordGroups).length > 0 ? (
+      {multiTopics.length > 1 && typeof paaQuestions === 'object' ? (
+        <div>
+          {multiTopics.map(topicItem => {
+            // For each topic, run Gemini grouping and render its own table
+            const topicQuestions = paaQuestions[topicItem] || [];
+            // Grouping logic for this topic
+            let topicGroupWords = [];
+            if (topicQuestions.length > 0) {
+              // Auto-detect shared words for this topic
+              const wordCount = {};
+              topicQuestions.forEach(q => {
+                q.toLowerCase().split(/\W+/).forEach(w => {
+                  if (w && !stopwords.includes(w)) {
+                    wordCount[w] = (wordCount[w] || 0) + 1;
+                  }
+                });
+              });
+              topicGroupWords = Object.keys(wordCount).filter(w => wordCount[w] > 1);
+            }
+            // Filter out stopwords
+            const validTopicGroupWords = topicGroupWords.filter(w => !stopwords.includes(w));
+            // Group questions by validTopicGroupWords
+            let topicWordGroups = {};
+            let topicSingleItems = [];
+            const topicSeenQuestions = new Set();
+            topicQuestions.forEach(q => {
+              const qLower = q.toLowerCase();
+              const words = qLower.split(/\W+/).filter(w => w && validTopicGroupWords.includes(w));
+              if (words.length === 0) {
+                if (!topicSeenQuestions.has(q)) {
+                  topicSingleItems.push(q);
+                  topicSeenQuestions.add(q);
+                }
+              } else {
+                let assigned = false;
+                words.forEach(word => {
+                  if (!topicWordGroups[word]) topicWordGroups[word] = [];
+                  if (!topicSeenQuestions.has(q)) {
+                    topicWordGroups[word].push(q);
+                    topicSeenQuestions.add(q);
+                    assigned = true;
+                  }
+                });
+                if (!assigned && !topicSeenQuestions.has(q)) {
+                  topicSingleItems.push(q);
+                  topicSeenQuestions.add(q);
+                }
+              }
+            });
+            Object.keys(topicWordGroups).forEach(word => {
+              if (topicWordGroups[word].length === 1) {
+                topicSingleItems.push(topicWordGroups[word][0]);
+                delete topicWordGroups[word];
+              }
+            });
+            topicWordGroups['Main Silo'] = topicSingleItems;
+            const topicSortedGroupKeys = ['Main Silo', ...Object.keys(topicWordGroups).filter(k => k !== 'Main Silo').sort((a, b) => topicWordGroups[b].length - topicWordGroups[a].length)];
+            return (
+              <div key={topicItem} style={{ marginBottom: '2rem', border: '2px solid #444', borderRadius: '8px', padding: '1rem' }}>
+                <h3 style={{ color: '#fff' }}>Silo: {topicItem}</h3>
+                <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
+                  PAA count: {topicQuestions.length}
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', background: '#222', color: '#fff', marginBottom: '1rem' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ borderBottom: '1px solid #444', padding: '0.5rem', textAlign: 'left' }}>PAA Question</th>
+                      <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>Mini Silo Keyword</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topicSortedGroupKeys.map(word => (
+                      topicWordGroups[word].map((q, idx) => {
+                        const isMain = word === 'Main Silo';
+                        const rowBg = isMain ? '#222' : '#333';
+                        const cellBg = isMain ? '#222' : '#2a2a2a';
+                        return (
+                          <tr key={word + '-' + idx} style={{ background: rowBg }}>
+                            <td style={{ borderBottom: '1px solid #333', padding: '0.5rem', background: cellBg }}>{q.replace(/^\*\s*/, '')}</td>
+                            <td style={{ borderBottom: '1px solid #333', padding: '0.5rem', background: cellBg }}>{word}</td>
+                          </tr>
+                        );
+                      })
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+        </div>
+      ) : Object.keys(wordGroups).length > 0 ? (
         <div>
           <h3>PAA Questions (Mini Silos by Shared Words)</h3>
           <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
