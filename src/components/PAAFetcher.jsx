@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import Modal from './Modal';
 
 
 const PAAFetcher = ({ topic }) => {
@@ -42,6 +43,9 @@ const PAAFetcher = ({ topic }) => {
   const geminiQuestionsSnapshotRef = useRef([]);
   const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
 
+  const [modalOpen, setModalOpen] = useState(false);
+  const [prefilteredPAAs, setPrefilteredPAAs] = useState([]);
+
   // Call Express API for PAA questions
   const fetchPAAQuestions = async () => {
     console.log('Fetch PAA called with topic:', topic);
@@ -74,6 +78,7 @@ const PAAFetcher = ({ topic }) => {
         return;
       }
       let paaList = data.questions || [];
+      setPrefilteredPAAs(paaList);
 
       // 2. Fetch blog titles from 'All Blogs' tab in selectedSheet
       let blogTitles = [];
@@ -89,10 +94,18 @@ const PAAFetcher = ({ topic }) => {
         // Ignore blog fetch errors, just skip filtering
       }
 
-      // 3. Remove PAAs that are exact matches to blog titles
-      let filteredPAAs = paaList.filter(paa => !blogTitles.some(title => title.toLowerCase() === paa.toLowerCase()));
+      // 3. Normalize and filter PAAs against blog titles
+      function normalize(str) {
+        return str.toLowerCase().replace(/[^a-z0-9 ]/gi, '').trim();
+      }
+      const normTitles = blogTitles.map(normalize);
+      let filteredPAAs = paaList.filter(paa => {
+        const normPAA = normalize(paa);
+        // Remove if exact match or substring match
+        return !normTitles.some(title => normPAA === title || normPAA.includes(title) || title.includes(normPAA));
+      });
 
-      // 4. Use Gemini to remove PAAs that are semantically similar to blog titles
+      // 4. Use Gemini to remove PAAs that are semantically similar to blog titles (run for all PAAs)
       if (geminiApiKey && filteredPAAs.length > 0 && blogTitles.length > 0) {
         try {
           const genAI = new GoogleGenerativeAI(geminiApiKey);
@@ -117,7 +130,7 @@ const PAAFetcher = ({ topic }) => {
       setPaaQuestions([]);
     }
     setLoading(false);
-  };
+  }; // end fetchPAAQuestions
 
   const handleInputChange = e => {
     setInputText(e.target.value);
@@ -279,7 +292,8 @@ const PAAFetcher = ({ topic }) => {
   const validGroupWords = groupWords.filter(w => !stopwords.includes(w));
 
   // Group questions by validGroupWords, but filter out topic variants
-  const wordGroups = {};
+  let wordGroups = {};
+  let singleItems = [];
   const seenQuestions = new Set();
   dedupedQuestions.forEach(q => {
     const qLower = q.toLowerCase();
@@ -289,31 +303,28 @@ const PAAFetcher = ({ topic }) => {
     // Remove groups for topic variants
     const filteredWords = words.filter(w => !topicVariants.includes(w));
     if (filteredWords.length === 0) {
-      if (!wordGroups['Main Silo']) wordGroups['Main Silo'] = [];
       if (!seenQuestions.has(q)) {
-        wordGroups['Main Silo'].push(q);
+        singleItems.push(q);
         seenQuestions.add(q);
       }
     } else {
+      let assigned = false;
       filteredWords.forEach(word => {
         if (!wordGroups[word]) wordGroups[word] = [];
         if (!seenQuestions.has(q)) {
           wordGroups[word].push(q);
           seenQuestions.add(q);
+          assigned = true;
         }
       });
+      if (!assigned && !seenQuestions.has(q)) {
+        singleItems.push(q);
+        seenQuestions.add(q);
+      }
     }
   });
-
-  // Sort groups: priority words first, then alphabetically
-  const sortedGroupKeys = Object.keys(wordGroups).sort((a, b) => {
-    const aPriority = priorityWords.indexOf(a);
-    const bPriority = priorityWords.indexOf(b);
-    if (aPriority === -1 && bPriority === -1) return a.localeCompare(b);
-    if (aPriority === -1) return 1;
-    if (bPriority === -1) return -1;
-    return aPriority - bPriority;
-  });
+  wordGroups['Main Silo'] = singleItems;
+  const sortedGroupKeys = ['Main Silo', ...Object.keys(wordGroups).filter(k => k !== 'Main Silo').sort((a, b) => wordGroups[b].length - wordGroups[a].length)];
 
   // Fetch tabs for selected sheet using Google Sheets API
   const [tabs, setTabs] = useState([]);
@@ -458,35 +469,74 @@ const PAAFetcher = ({ topic }) => {
         </button>
         {exportError && <div style={{ color: 'red', marginTop: '0.5rem' }}>{exportError}</div>}
       </div>
+      <div style={{ marginBottom: '1rem' }}>
+        <button onClick={() => setModalOpen(true)}>
+          Show Full Prefiltered PAA List
+        </button>
+      </div>
       {Object.keys(wordGroups).length > 0 ? (
         <div>
           <h3>PAA Questions (Mini Silos by Shared Words)</h3>
-          {sortedGroupKeys.map(word => (
-            <div key={word} style={{ marginBottom: '1rem' }}>
-              <strong>{word.charAt(0).toUpperCase() + word.slice(1)}</strong>
-              <ul>
-                {wordGroups[word].map((q, idx) => (
-                  <li key={idx}>{q}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      ) : (
-        dedupedQuestions.length > 0 && (
-          <div>
-            <h3>PAA Questions (Deduped)</h3>
-            <ul>
-              {dedupedQuestions.map((q, idx) => (
-                <li key={idx}>{q}</li>
+          <table style={{ width: '100%', borderCollapse: 'collapse', background: '#222', color: '#fff', marginBottom: '2rem' }}>
+            <thead>
+              <tr>
+                <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>PAA Question</th>
+                <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>Silo Keyword</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedGroupKeys.map(word => (
+                wordGroups[word].map((q, idx) => (
+                  <tr key={word + '-' + idx}>
+                    <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{q}</td>
+                    <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{word}</td>
+                  </tr>
+                ))
               ))}
-            </ul>
-          </div>
-        )
-      )}
+            </tbody>
+          </table>
+        </div>
+      ) : dedupedQuestions.length > 0 ? (
+        <div>
+          <h3>PAA Questions (Deduped)</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', background: '#222', color: '#fff', marginBottom: '2rem' }}>
+            <thead>
+              <tr>
+                <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>PAA Question</th>
+                <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>Silo Keyword</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dedupedQuestions.map((q, idx) => (
+                <tr key={idx}>
+                  <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{q}</td>
+                  <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>Main Silo</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Full Prefiltered PAA List">
+        <table style={{ width: '100%', borderCollapse: 'collapse', background: '#222', color: '#fff', marginBottom: '2rem' }}>
+          <thead>
+            <tr>
+              <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>PAA Question</th>
+              <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>Silo Keyword</th>
+            </tr>
+          </thead>
+          <tbody>
+            {prefilteredPAAs.map((q, idx) => (
+              <tr key={idx}>
+                <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{q}</td>
+                <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>-</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Modal>
       {error && <div style={{ color: 'red' }}>{error}</div>}
     </div>
   );
-};
-
+}
 export default PAAFetcher;
