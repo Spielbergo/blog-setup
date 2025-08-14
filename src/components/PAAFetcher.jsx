@@ -513,12 +513,18 @@ const PAAFetcher = ({ topic }) => {
             </thead>
             <tbody>
               {sortedGroupKeys.map(word => (
-                wordGroups[word].map((q, idx) => (
-                  <tr key={word + '-' + idx}>
-                    <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{q.replace(/^\*\s*/, '')}</td>
-                    <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{word}</td>
-                  </tr>
-                ))
+                wordGroups[word].map((q, idx) => {
+                  // Color code: Main Silo = default, others = lighter
+                  const isMain = word === 'Main Silo';
+                  const rowBg = isMain ? '#222' : '#333';
+                  const cellBg = isMain ? '#222' : '#2a2a2a';
+                  return (
+                    <tr key={word + '-' + idx} style={{ background: rowBg }}>
+                      <td style={{ borderBottom: '1px solid #333', padding: '0.5rem', background: cellBg }}>{q.replace(/^\*\s*/, '')}</td>
+                      <td style={{ borderBottom: '1px solid #333', padding: '0.5rem', background: cellBg }}>{word}</td>
+                    </tr>
+                  );
+                })
               ))}
             </tbody>
           </table>
