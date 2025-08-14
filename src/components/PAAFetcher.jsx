@@ -55,6 +55,7 @@ const PAAFetcher = ({ topic }) => {
     }
     setLoading(true);
     setError('');
+    console.log('Starting fetchPAAQuestions...');
     try {
       // 1. Fetch PAAs from backend
       const res = await fetch('https://blog-setup-server.onrender.com/api/paa', {
@@ -62,22 +63,27 @@ const PAAFetcher = ({ topic }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keyword: topic, depth, maxQuestions })
       });
+      console.log('PAA fetch response:', res);
       let data;
       try {
         data = await res.json();
+        console.log('PAA fetch JSON:', data);
       } catch (jsonErr) {
+        console.error('Error parsing backend response:', jsonErr);
         setError('Error parsing backend response.');
         setPaaQuestions([]);
         setLoading(false);
         return;
       }
       if (!res.ok) {
+        console.error('Backend error:', data?.error);
         setError(data?.error ? `Backend error: ${data.error}` : 'Failed to fetch PAA questions');
         setPaaQuestions([]);
         setLoading(false);
         return;
       }
       let paaList = data.questions || [];
+      console.log('Fetched PAA list:', paaList);
       setPrefilteredPAAs(paaList);
 
       // 2. Fetch blog titles from 'All Blogs' tab in selectedSheet
@@ -85,12 +91,15 @@ const PAAFetcher = ({ topic }) => {
       try {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${selectedSheet}/values/All Blogs?key=${sheetApiKey}`;
         const blogRes = await fetch(url);
+        console.log('Blog titles fetch response:', blogRes);
         if (blogRes.ok) {
           const blogData = await blogRes.json();
+          console.log('Blog titles JSON:', blogData);
           // Flatten and clean titles
           blogTitles = (blogData.values || []).map(row => row[0]?.trim()).filter(Boolean);
         }
       } catch (err) {
+        console.error('Error fetching blog titles:', err);
         // Ignore blog fetch errors, just skip filtering
       }
 
@@ -104,6 +113,7 @@ const PAAFetcher = ({ topic }) => {
         // Remove if exact match or substring match
         return !normTitles.some(title => normPAA === title || normPAA.includes(title) || title.includes(normPAA));
       });
+      console.log('Filtered PAAs after blog title check:', filteredPAAs);
 
       // 4. Use Gemini to remove PAAs that are semantically similar to blog titles (run for all PAAs)
       if (geminiApiKey && filteredPAAs.length > 0 && blogTitles.length > 0) {
@@ -119,12 +129,15 @@ const PAAFetcher = ({ topic }) => {
           if (geminiFiltered.length > 0 && geminiFiltered.every(q => q.endsWith('?'))) {
             filteredPAAs = geminiFiltered;
           }
+          console.log('Filtered PAAs after Gemini:', filteredPAAs);
         } catch (err) {
+          console.error('Error in Gemini filtering:', err);
           // Ignore Gemini errors, keep default filteredPAAs
         }
       }
 
       setPaaQuestions(filteredPAAs);
+      console.log('Final PAAs set to state:', filteredPAAs);
     } catch (err) {
       setError('Error fetching PAA questions. Is the backend running?');
       setPaaQuestions([]);
