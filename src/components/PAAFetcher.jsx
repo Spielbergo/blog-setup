@@ -499,7 +499,7 @@ const PAAFetcher = ({ topic }) => {
           <table style={{ width: '100%', borderCollapse: 'collapse', background: '#222', color: '#fff', marginBottom: '2rem' }}>
             <thead>
               <tr>
-                <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>PAA Question</th>
+                <th style={{ borderBottom: '1px solid #444', padding: '0.5rem', textAlign: 'left' }}>PAA Question</th>
                 <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>Silo Keyword</th>
               </tr>
             </thead>
@@ -540,18 +540,14 @@ const PAAFetcher = ({ topic }) => {
         <table style={{ width: '100%', borderCollapse: 'collapse', background: '#222', color: '#fff', marginBottom: '2rem' }}>
           <thead>
             <tr>
-              <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>PAA Question</th>
-              <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>Silo Keyword</th>
+              <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>PAA Question (Prefiltered)</th>
             </tr>
           </thead>
           <tbody>
-            {sortedGroupKeys.map(word => (
-              wordGroups[word].map((q, idx) => (
-                <tr key={word + '-modal-' + idx}>
-                  <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{q}</td>
-                  <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{word}</td>
-                </tr>
-              ))
+            {prefilteredPAAs.map((q, idx) => (
+              <tr key={'prefiltered-' + idx}>
+                <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{q}</td>
+              </tr>
             ))}
           </tbody>
         </table>
