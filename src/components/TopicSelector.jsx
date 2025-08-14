@@ -99,7 +99,7 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
                 <th style={{ cursor: 'pointer' }} onClick={() => handleSort('kd')}>
                   KD {sortBy === 'kd' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                 </th>
-                <th>Action</th>
+                <th style={{ textAlign: 'center' }}>Action</th>
               </tr>
             </thead>
             <tbody>
