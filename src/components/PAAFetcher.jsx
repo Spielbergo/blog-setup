@@ -103,15 +103,21 @@ const PAAFetcher = ({ topic }) => {
         // Ignore blog fetch errors, just skip filtering
       }
 
-      // 3. Normalize and filter PAAs against blog titles
+      // 3. Normalize and filter PAAs against blog titles (less aggressive)
       function normalize(str) {
         return str.toLowerCase().replace(/[^a-z0-9 ]/gi, '').trim();
       }
       const normTitles = blogTitles.map(normalize);
       let filteredPAAs = paaList.filter(paa => {
         const normPAA = normalize(paa);
-        // Remove if exact match or substring match
-        return !normTitles.some(title => normPAA === title || normPAA.includes(title) || title.includes(normPAA));
+        return !normTitles.some(title => {
+          // Only filter if exact match
+          if (normPAA === title) return true;
+          // Or if blog title is long (>=5 words) and is substring of PAA
+          const titleWordCount = title.split(' ').filter(Boolean).length;
+          if (titleWordCount >= 5 && normPAA.includes(title)) return true;
+          return false;
+        });
       });
       console.log('Filtered PAAs after blog title check:', filteredPAAs);
 
