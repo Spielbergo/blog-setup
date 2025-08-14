@@ -52,6 +52,7 @@ const PAAFetcher = ({ topic }) => {
     setLoading(true);
     setError('');
     try {
+      // 1. Fetch PAAs from backend
       const res = await fetch('https://blog-setup-server.onrender.com/api/paa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -67,13 +68,50 @@ const PAAFetcher = ({ topic }) => {
         return;
       }
       if (!res.ok) {
-        // Show backend error message if available
         setError(data?.error ? `Backend error: ${data.error}` : 'Failed to fetch PAA questions');
         setPaaQuestions([]);
         setLoading(false);
         return;
       }
-      setPaaQuestions(data.questions || []);
+      let paaList = data.questions || [];
+
+      // 2. Fetch blog titles from 'All Blogs' tab in selectedSheet
+      let blogTitles = [];
+      try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${selectedSheet}/values/All Blogs?key=${sheetApiKey}`;
+        const blogRes = await fetch(url);
+        if (blogRes.ok) {
+          const blogData = await blogRes.json();
+          // Flatten and clean titles
+          blogTitles = (blogData.values || []).map(row => row[0]?.trim()).filter(Boolean);
+        }
+      } catch (err) {
+        // Ignore blog fetch errors, just skip filtering
+      }
+
+      // 3. Remove PAAs that are exact matches to blog titles
+      let filteredPAAs = paaList.filter(paa => !blogTitles.some(title => title.toLowerCase() === paa.toLowerCase()));
+
+      // 4. Use Gemini to remove PAAs that are semantically similar to blog titles
+      if (geminiApiKey && filteredPAAs.length > 0 && blogTitles.length > 0) {
+        try {
+          const genAI = new GoogleGenerativeAI(geminiApiKey);
+          const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+          // Prompt: return only PAAs that are NOT similar to any of these blog titles
+          const prompt = `Here is a list of blog titles:\n${blogTitles.join('\n')}\nHere is a list of new PAA questions:\n${filteredPAAs.join('\n')}\nReturn only the PAA questions that are NOT similar in meaning to any of the blog titles. Only return the questions, one per line.`;
+          const result = await model.generateContent(prompt);
+          const text = result.response.text();
+          const geminiFiltered = text.split(/\n|\r/).map(q => q.trim()).filter(Boolean);
+          // Only use Gemini result if it looks like a list of questions
+          if (geminiFiltered.length > 0 && geminiFiltered.every(q => q.endsWith('?'))) {
+            filteredPAAs = geminiFiltered;
+          }
+        } catch (err) {
+          // Ignore Gemini errors, keep default filteredPAAs
+        }
+      }
+
+      setPaaQuestions(filteredPAAs);
     } catch (err) {
       setError('Error fetching PAA questions. Is the backend running?');
       setPaaQuestions([]);
