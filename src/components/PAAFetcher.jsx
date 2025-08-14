@@ -319,14 +319,16 @@ let singleItems = [];
 const seenQuestions = new Set();
 let sortedGroupKeys = [];
 if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
-  // Multi-topic: group by topic
+  // Multi-topic: group by topic, each topic gets its own silo
+  wordGroups = {};
+  sortedGroupKeys = [];
   multiTopics.forEach(topicItem => {
     const arr = paaQuestions[topicItem] || [];
-    wordGroups[topicItem] = arr;
+    if (arr.length > 0) {
+      wordGroups[topicItem] = arr;
+      sortedGroupKeys.push(topicItem);
+    }
   });
-  // No mini silos, just group by topic
-  singleItems = [];
-  sortedGroupKeys = multiTopics;
 } else {
   dedupedQuestions.forEach(q => {
     const qLower = q.toLowerCase();
