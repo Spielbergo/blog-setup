@@ -285,7 +285,7 @@ const PAAFetcher = ({ topic }) => {
   const topicVariants = [mainTopic, ...topicWords, ...topicWords.map(w => w.endsWith('s') ? w.slice(0, -1) : w + 's')];
   // Descriptive/how-to words to prioritize
   const priorityWords = [
-    'apply','remove','different','waterproof','prevent','cause','choose','compare','types','benefits','side effects','safe','natural','diy','tips','tricks','methods','ingredients','effective','permanent','temporary','price','cost','reviews','recommend','avoid','problems','solutions','strongest','actually','injections','permanently'
+    'apply','remove','different','waterproof','prevent','cause','choose','compare','types','benefits','side effects','safe','natural','diy','tips','tricks','methods','ingredients','effective','permanent','temporary','price','cost','reviews','recommend','avoid','problems','solutions','strongest','actually','injections','permanently', 'color'
   ];
 
   // Filter out stopwords from groupWords before grouping
@@ -526,11 +526,13 @@ const PAAFetcher = ({ topic }) => {
             </tr>
           </thead>
           <tbody>
-            {prefilteredPAAs.map((q, idx) => (
-              <tr key={idx}>
-                <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{q}</td>
-                <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>-</td>
-              </tr>
+            {sortedGroupKeys.map(word => (
+              wordGroups[word].map((q, idx) => (
+                <tr key={word + '-modal-' + idx}>
+                  <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{q}</td>
+                  <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{word}</td>
+                </tr>
+              ))
             ))}
           </tbody>
         </table>
