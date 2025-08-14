@@ -316,10 +316,8 @@ const PAAFetcher = ({ topic }) => {
   const seenQuestions = new Set();
   dedupedQuestions.forEach(q => {
     const qLower = q.toLowerCase();
-    // Only include questions that contain the main topic or its variants
     if (!topicVariants.some(v => qLower.includes(v))) return;
     const words = qLower.split(/\W+/).filter(w => w && validGroupWords.includes(w));
-    // Remove groups for topic variants
     const filteredWords = words.filter(w => !topicVariants.includes(w));
     if (filteredWords.length === 0) {
       if (!seenQuestions.has(q)) {
@@ -340,6 +338,13 @@ const PAAFetcher = ({ topic }) => {
         singleItems.push(q);
         seenQuestions.add(q);
       }
+    }
+  });
+  // Move single-item silos to Main Silo
+  Object.keys(wordGroups).forEach(word => {
+    if (wordGroups[word].length === 1) {
+      singleItems.push(wordGroups[word][0]);
+      delete wordGroups[word];
     }
   });
   wordGroups['Main Silo'] = singleItems;
@@ -496,6 +501,9 @@ const PAAFetcher = ({ topic }) => {
       {Object.keys(wordGroups).length > 0 ? (
         <div>
           <h3>PAA Questions (Mini Silos by Shared Words)</h3>
+          <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
+            Filtered PAA count: {dedupedQuestions.length}
+          </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', background: '#222', color: '#fff', marginBottom: '2rem' }}>
             <thead>
               <tr>
@@ -507,7 +515,7 @@ const PAAFetcher = ({ topic }) => {
               {sortedGroupKeys.map(word => (
                 wordGroups[word].map((q, idx) => (
                   <tr key={word + '-' + idx}>
-                    <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{q}</td>
+                    <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{q.replace(/^\*\s*/, '')}</td>
                     <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{word}</td>
                   </tr>
                 ))
@@ -518,6 +526,9 @@ const PAAFetcher = ({ topic }) => {
       ) : dedupedQuestions.length > 0 ? (
         <div>
           <h3>PAA Questions (Deduped)</h3>
+          <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
+            Filtered PAA count: {dedupedQuestions.length}
+          </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', background: '#222', color: '#fff', marginBottom: '2rem' }}>
             <thead>
               <tr>
@@ -528,7 +539,7 @@ const PAAFetcher = ({ topic }) => {
             <tbody>
               {dedupedQuestions.map((q, idx) => (
                 <tr key={idx}>
-                  <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{q}</td>
+                  <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{q.replace(/^\*\s*/, '')}</td>
                   <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>Main Silo</td>
                 </tr>
               ))}
@@ -537,6 +548,9 @@ const PAAFetcher = ({ topic }) => {
         </div>
       ) : null}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Full Prefiltered PAA List">
+        <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
+          Unfiltered PAA count: {prefilteredPAAs.length}
+        </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', background: '#222', color: '#fff', marginBottom: '2rem' }}>
           <thead>
             <tr>
@@ -546,7 +560,7 @@ const PAAFetcher = ({ topic }) => {
           <tbody>
             {prefilteredPAAs.map((q, idx) => (
               <tr key={'prefiltered-' + idx}>
-                <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{q}</td>
+                <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{q.replace(/^\*\s*/, '')}</td>
               </tr>
             ))}
           </tbody>

@@ -20,7 +20,7 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
       const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
       // Prepare prompt with keywords
       const keywordList = keywords.map(k => k.keyword).join(', ');
-      const prompt = `Given the main topic "${topic}", suggest 10 closely related topics from this list: ${keywordList}. Return only the topics from the list, no explanations.`;
+      const prompt = `Given the main topic "${topic}", suggest all closely related topics from this list: ${keywordList}. Return only the topics from the list, no explanations.`;
       const result = await model.generateContent(prompt);
       const text = result.response.text();
       // Split Gemini response into topics
@@ -100,6 +100,9 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
       {relatedTopics.length > 0 && (
         <div style={{ marginTop: '1rem', overflowX: 'auto' }}>
           <h3>Related Topics</h3>
+          <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
+            Related topics count: {relatedTopics.length}
+          </div>
           <table className="kw-table" style={{ width: '100%', borderCollapse: 'collapse', background: 'var(--color-surface)' }}>
             <thead>
               <tr>
