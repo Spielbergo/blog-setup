@@ -4,6 +4,15 @@ import Modal from './Modal';
 
 
 const PAAFetcher = ({ topic }) => {
+  // Support multiple topics
+  const [multiTopics, setMultiTopics] = useState([]);
+  useEffect(() => {
+    if (Array.isArray(topic)) {
+      setMultiTopics(topic);
+    } else if (typeof topic === 'string' && topic.trim()) {
+      setMultiTopics([topic]);
+    }
+  }, [topic]);
   // Get API key from .env
   const sheetApiKey = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY || '';
   const sheetId1 = import.meta.env.VITE_GOOGLE_SHEETS_SHEET_ID_1 || '';
@@ -48,105 +57,80 @@ const PAAFetcher = ({ topic }) => {
 
   // Call Express API for PAA questions
   const fetchPAAQuestions = async () => {
-    console.log('Fetch PAA called with topic:', topic);
-    if (!topic || typeof topic !== 'string' || topic.trim() === '') {
-      setError('Please enter a topic before fetching PAA questions.');
+    console.log('Fetch PAA called with topics:', multiTopics);
+    if (!multiTopics || multiTopics.length === 0) {
+      setError('Please select at least one topic before fetching PAA questions.');
       return;
     }
     setLoading(true);
     setError('');
-    console.log('Starting fetchPAAQuestions...');
+    let allResults = {};
     try {
-      // 1. Fetch PAAs from backend
-      const res = await fetch('https://blog-setup-server.onrender.com/api/paa', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyword: topic, depth, maxQuestions })
-      });
-      console.log('PAA fetch response:', res);
-      let data;
-      try {
-        data = await res.json();
-        console.log('PAA fetch JSON:', data);
-      } catch (jsonErr) {
-        console.error('Error parsing backend response:', jsonErr);
-        setError('Error parsing backend response.');
-        setPaaQuestions([]);
-        setLoading(false);
-        return;
-      }
-      if (!res.ok) {
-        console.error('Backend error:', data?.error);
-        setError(data?.error ? `Backend error: ${data.error}` : 'Failed to fetch PAA questions');
-        setPaaQuestions([]);
-        setLoading(false);
-        return;
-      }
-      let paaList = data.questions || [];
-      console.log('Fetched PAA list:', paaList);
-      setPrefilteredPAAs(paaList);
-
-      // 2. Fetch blog titles from 'All Blogs' tab in selectedSheet
+      // 1. Fetch blog titles once
       let blogTitles = [];
       try {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${selectedSheet}/values/All Blogs?key=${sheetApiKey}`;
         const blogRes = await fetch(url);
-        console.log('Blog titles fetch response:', blogRes);
         if (blogRes.ok) {
           const blogData = await blogRes.json();
-          console.log('Blog titles JSON:', blogData);
-          // Flatten and clean titles
           blogTitles = (blogData.values || []).map(row => row[0]?.trim()).filter(Boolean);
         }
       } catch (err) {
-        console.error('Error fetching blog titles:', err);
-        // Ignore blog fetch errors, just skip filtering
+        // Ignore blog fetch errors
       }
-
-      // 3. Normalize and filter PAAs against blog titles (less aggressive)
       function normalize(str) {
         return str.toLowerCase().replace(/[^a-z0-9 ]/gi, '').trim();
       }
       const normTitles = blogTitles.map(normalize);
-      let filteredPAAs = paaList.filter(paa => {
-        const normPAA = normalize(paa);
-        return !normTitles.some(title => {
-          // Only filter if exact match
-          if (normPAA === title) return true;
-          // Or if blog title is long (>=5 words) and is substring of PAA
-          const titleWordCount = title.split(' ').filter(Boolean).length;
-          if (titleWordCount >= 5 && normPAA.includes(title)) return true;
-          return false;
+      // 2. For each topic, fetch PAAs and filter
+      for (const topicItem of multiTopics) {
+        // Fetch PAAs for topicItem
+        const res = await fetch('https://blog-setup-server.onrender.com/api/paa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keyword: topicItem, depth, maxQuestions })
         });
-      });
-      console.log('Filtered PAAs after blog title check:', filteredPAAs);
-
-      // 4. Use Gemini to remove PAAs that are semantically similar to blog titles (run for all PAAs)
-      if (geminiApiKey && filteredPAAs.length > 0 && blogTitles.length > 0) {
+        let data;
         try {
-          const genAI = new GoogleGenerativeAI(geminiApiKey);
-          const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-          // Prompt: return only PAAs that are NOT similar to any of these blog titles
-          const prompt = `Here is a list of blog titles:\n${blogTitles.join('\n')}\nHere is a list of new PAA questions:\n${filteredPAAs.join('\n')}\nReturn only the PAA questions that are NOT similar in meaning to any of the blog titles. Only return the questions, one per line.`;
-          const result = await model.generateContent(prompt);
-          const text = result.response.text();
-          const geminiFiltered = text.split(/\n|\r/).map(q => q.trim()).filter(Boolean);
-          // Only use Gemini result if it looks like a list of questions
-          if (geminiFiltered.length > 0 && geminiFiltered.every(q => q.endsWith('?'))) {
-            filteredPAAs = geminiFiltered;
-          }
-          console.log('Filtered PAAs after Gemini:', filteredPAAs);
-        } catch (err) {
-          console.error('Error in Gemini filtering:', err);
-          // Ignore Gemini errors, keep default filteredPAAs
+          data = await res.json();
+        } catch (jsonErr) {
+          continue;
         }
+        if (!res.ok) continue;
+        let paaList = data.questions || [];
+        // Filter against blog titles
+        let filteredPAAs = paaList.filter(paa => {
+          const normPAA = normalize(paa);
+          return !normTitles.some(title => {
+            if (normPAA === title) return true;
+            const titleWordCount = title.split(' ').filter(Boolean).length;
+            if (titleWordCount >= 5 && normPAA.includes(title)) return true;
+            return false;
+          });
+        });
+        // Gemini semantic filter
+        if (geminiApiKey && filteredPAAs.length > 0 && blogTitles.length > 0) {
+          try {
+            const genAI = new GoogleGenerativeAI(geminiApiKey);
+            const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+            const prompt = `Here is a list of blog titles:\n${blogTitles.join('\n')}\nHere is a list of new PAA questions:\n${filteredPAAs.join('\n')}\nReturn only the PAA questions that are NOT similar in meaning to any of the blog titles. Only return the questions, one per line.`;
+            const result = await model.generateContent(prompt);
+            const text = result.response.text();
+            const geminiFiltered = text.split(/\n|\r/).map(q => q.trim()).filter(Boolean);
+            if (geminiFiltered.length > 0 && geminiFiltered.every(q => q.endsWith('?'))) {
+              filteredPAAs = geminiFiltered;
+            }
+          } catch (err) {
+            // Ignore Gemini errors
+          }
+        }
+        allResults[topicItem] = filteredPAAs;
       }
-
-      setPaaQuestions(filteredPAAs);
-      console.log('Final PAAs set to state:', filteredPAAs);
+      setPaaQuestions(allResults);
+      setPrefilteredPAAs([]); // not used in multi
     } catch (err) {
       setError('Error fetching PAA questions. Is the backend running?');
-      setPaaQuestions([]);
+      setPaaQuestions({});
     }
     setLoading(false);
   }; // end fetchPAAQuestions
@@ -158,7 +142,17 @@ const PAAFetcher = ({ topic }) => {
   };
 
   // Deduplicate questions
-  const dedupedQuestionsRaw = Array.from(new Set(paaQuestions.map(q => q.trim()).filter(Boolean)));
+  // If multi-topic, flatten all results
+  let dedupedQuestionsRaw = [];
+  if (Array.isArray(paaQuestions)) {
+    dedupedQuestionsRaw = Array.from(new Set(paaQuestions.map(q => q.trim()).filter(Boolean)));
+  } else if (typeof paaQuestions === 'object' && paaQuestions !== null) {
+    // Multi-topic: flatten all arrays
+    Object.values(paaQuestions).forEach(arr => {
+      dedupedQuestionsRaw.push(...arr.map(q => q.trim()).filter(Boolean));
+    });
+    dedupedQuestionsRaw = Array.from(new Set(dedupedQuestionsRaw));
+  }
 
   // Filter out questions mentioning brands/celebrities using Gemini
   const [filteredQuestions, setFilteredQuestions] = useState([]);
@@ -298,10 +292,19 @@ const PAAFetcher = ({ topic }) => {
 
   // Improved grouping and sorting
   // Remove groups for main topic and its variants, deduplicate questions, prioritize descriptive/how-to words
-  const mainTopic = topic.toLowerCase();
-  // Variants: split topic into words, add singular/plural forms
-  const topicWords = Array.from(new Set(mainTopic.split(/\W+/).filter(Boolean)));
-  const topicVariants = [mainTopic, ...topicWords, ...topicWords.map(w => w.endsWith('s') ? w.slice(0, -1) : w + 's')];
+  // Support topic as string or array
+  let mainTopic = '';
+  let topicVariants = [];
+  if (Array.isArray(topic)) {
+    // Use first topic for variants, but multiTopics logic will handle grouping
+    mainTopic = topic[0]?.toLowerCase?.() || '';
+    const topicWords = Array.from(new Set(mainTopic.split(/\W+/).filter(Boolean)));
+    topicVariants = [mainTopic, ...topicWords, ...topicWords.map(w => w.endsWith('s') ? w.slice(0, -1) : w + 's')];
+  } else if (typeof topic === 'string') {
+    mainTopic = topic.toLowerCase();
+    const topicWords = Array.from(new Set(mainTopic.split(/\W+/).filter(Boolean)));
+    topicVariants = [mainTopic, ...topicWords, ...topicWords.map(w => w.endsWith('s') ? w.slice(0, -1) : w + 's')];
+  }
   // Descriptive/how-to words to prioritize
   const priorityWords = [
     'apply','remove','different','waterproof','prevent','cause','choose','compare','types','benefits','side effects','safe','natural','diy','tips','tricks','methods','ingredients','effective','permanent','temporary','price','cost','reviews','recommend','avoid','problems','solutions','strongest','actually','injections','permanently', 'color'
@@ -311,9 +314,20 @@ const PAAFetcher = ({ topic }) => {
   const validGroupWords = groupWords.filter(w => !stopwords.includes(w));
 
   // Group questions by validGroupWords, but filter out topic variants
-  let wordGroups = {};
-  let singleItems = [];
-  const seenQuestions = new Set();
+let wordGroups = {};
+let singleItems = [];
+const seenQuestions = new Set();
+let sortedGroupKeys = [];
+if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
+  // Multi-topic: group by topic
+  multiTopics.forEach(topicItem => {
+    const arr = paaQuestions[topicItem] || [];
+    wordGroups[topicItem] = arr;
+  });
+  // No mini silos, just group by topic
+  singleItems = [];
+  sortedGroupKeys = multiTopics;
+} else {
   dedupedQuestions.forEach(q => {
     const qLower = q.toLowerCase();
     if (!topicVariants.some(v => qLower.includes(v))) return;
@@ -340,7 +354,6 @@ const PAAFetcher = ({ topic }) => {
       }
     }
   });
-  // Move single-item silos to Main Silo
   Object.keys(wordGroups).forEach(word => {
     if (wordGroups[word].length === 1) {
       singleItems.push(wordGroups[word][0]);
@@ -348,7 +361,8 @@ const PAAFetcher = ({ topic }) => {
     }
   });
   wordGroups['Main Silo'] = singleItems;
-  const sortedGroupKeys = ['Main Silo', ...Object.keys(wordGroups).filter(k => k !== 'Main Silo').sort((a, b) => wordGroups[b].length - wordGroups[a].length)];
+  sortedGroupKeys = ['Main Silo', ...Object.keys(wordGroups).filter(k => k !== 'Main Silo').sort((a, b) => wordGroups[b].length - wordGroups[a].length)];
+}
 
   // Fetch tabs for selected sheet using Google Sheets API
   const [tabs, setTabs] = useState([]);

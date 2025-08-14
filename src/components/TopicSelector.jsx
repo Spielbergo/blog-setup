@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 
 const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
+  const [selectedTopics, setSelectedTopics] = useState([]);
   const [mainTopic, setMainTopic] = useState('');
   const [relatedTopics, setRelatedTopics] = useState([]);
   const [sortBy, setSortBy] = useState('keyword');
@@ -99,6 +100,24 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
       {error && <div style={{ color: 'red', marginTop: '1rem' }}>{error}</div>}
       {relatedTopics.length > 0 && (
         <div style={{ marginTop: '1rem', overflowX: 'auto' }}>
+          {selectedTopics.length > 0 && (
+            <button
+              className="btn"
+              style={{ marginBottom: '1rem' }}
+              onClick={() => {
+                if (onTopicSelected) {
+                  // If only one topic is selected, pass as string; else pass array
+                  if (selectedTopics.length === 1) {
+                    onTopicSelected(selectedTopics[0]);
+                  } else {
+                    onTopicSelected(selectedTopics);
+                  }
+                }
+              }}
+            >
+              Fetch All Selected
+            </button>
+          )}
           <h3>Related Topics</h3>
           <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
             Related topics count: {relatedTopics.length}
@@ -112,7 +131,7 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
                 <th style={{ cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('volume')}>
                   Search Volume {sortBy === 'volume' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                 </th>
-                <th style={{ cursor: 'pointer' }} onClick={() => handleSort('kd')}>
+                <th style={{ cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('kd')}>
                   KD {sortBy === 'kd' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                 </th>
                 <th style={{ textAlign: 'center' }}>Action</th>
@@ -121,6 +140,20 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
             <tbody>
               {sortedTopics.map((item, idx) => (
                 <tr key={idx} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  <td style={{ textAlign: 'left' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedTopics.includes(item.keyword)}
+                      style={{ width: 15, height: 15, marginRight: '0.5rem' }}
+                      onChange={e => {
+                        if (e.target.checked) {
+                          setSelectedTopics([...selectedTopics, item.keyword]);
+                        } else {
+                          setSelectedTopics(selectedTopics.filter(t => t !== item.keyword));
+                        }
+                      }}
+                    />
+                  </td>
                   <td style={{ padding: '0.5rem 1rem' }}>{item.keyword}</td>
                   <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>{item.volume.toLocaleString()}</td>
                   <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>{item.kd !== null && item.kd !== undefined ? item.kd : '-'}</td>
