@@ -237,14 +237,17 @@ const PAAFetcher = ({ topic }) => {
     'apply','remove','different','waterproof','prevent','cause','choose','compare','types','benefits','side effects','safe','natural','diy','tips','tricks','methods','ingredients','effective','permanent','temporary','price','cost','reviews','recommend','avoid','problems','solutions','strongest','actually','injections','permanently'
   ];
 
-  // Group questions by groupWords, but filter out topic variants
+  // Filter out stopwords from groupWords before grouping
+  const validGroupWords = groupWords.filter(w => !stopwords.includes(w));
+
+  // Group questions by validGroupWords, but filter out topic variants
   const wordGroups = {};
   const seenQuestions = new Set();
   dedupedQuestions.forEach(q => {
     const qLower = q.toLowerCase();
     // Only include questions that contain the main topic or its variants
     if (!topicVariants.some(v => qLower.includes(v))) return;
-    const words = qLower.split(/\W+/).filter(w => w && groupWords.includes(w));
+    const words = qLower.split(/\W+/).filter(w => w && validGroupWords.includes(w));
     // Remove groups for topic variants
     const filteredWords = words.filter(w => !topicVariants.includes(w));
     if (filteredWords.length === 0) {

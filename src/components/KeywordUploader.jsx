@@ -92,7 +92,7 @@ const KeywordUploader = ({ onKeywordsParsed }) => {
                   <th style={{ cursor: 'pointer' }} onClick={() => handleSort('keyword')}>
                     Keyword {sortBy === 'keyword' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                   </th>
-                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('volume')}>
+                  <th style={{ cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('volume')}>
                     Search Volume {sortBy === 'volume' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                   </th>
                   <th style={{ cursor: 'pointer' }} onClick={() => handleSort('kd')}>
