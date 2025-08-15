@@ -20,7 +20,7 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
     setError('');
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
       // Prepare prompt with keywords
       const keywordList = keywords.map(k => k.keyword).join(', ');
       const prompt = `Given the main topic "${topic}", suggest all closely related topics from this list: ${keywordList}. Return only the topics from the list, no explanations.`;
