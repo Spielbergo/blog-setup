@@ -20,11 +20,17 @@ const PAAFetcher = ({ topic }) => {
   const sheetApiKey = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY || '';
   const sheetId1 = import.meta.env.VITE_GOOGLE_SHEETS_SHEET_ID_1 || '';
   const sheetId2 = import.meta.env.VITE_GOOGLE_SHEETS_SHEET_ID_2 || '';
+  const sheetId3 = import.meta.env.VITE_GOOGLE_SHEETS_SHEET_ID_3 || '';
+  const sheetId4 = import.meta.env.VITE_GOOGLE_SHEETS_SHEET_ID_4 || '';
+  const sheetId5 = import.meta.env.VITE_GOOGLE_SHEETS_SHEET_ID_5 || '';
 
   // Sheet IDs (move above useState)
   const sheets = [
     { id: sheetId1, title: 'Lip Stuff' },
-    { id: sheetId2, title: 'Mascara' }
+    { id: sheetId2, title: 'Shampoo' },
+    { id: sheetId3, title: 'Mascara' },
+    { id: sheetId4, title: 'Jen Jewell' },
+    { id: sheetId5, title: 'Blue Kitchens' }
   ];
 
   // Google Sheets Export (API key from .env, dropdowns for sheet/tab, Download CSV)
