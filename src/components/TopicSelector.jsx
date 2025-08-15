@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 // Vite exposes env variables prefixed with VITE_ via import.meta.env
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
@@ -12,6 +12,8 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Persist last checked index for shift-click multi-select
+  const lastCheckedIndexRef = useRef(null);
 
   const fetchRelatedTopicsGemini = async (topic) => {
     setLoading(true);
@@ -100,24 +102,30 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
       {error && <div style={{ color: 'red', marginTop: '1rem' }}>{error}</div>}
       {relatedTopics.length > 0 && (
         <div style={{ marginTop: '1rem', overflowX: 'auto' }}>
-          {selectedTopics.length > 0 && (
-            <button
-              className="btn"
-              style={{ marginBottom: '1rem' }}
-              onClick={() => {
-                if (onTopicSelected) {
-                  // If only one topic is selected, pass as string; else pass array
-                  if (selectedTopics.length === 1) {
-                    onTopicSelected(selectedTopics[0]);
-                  } else {
-                    onTopicSelected(selectedTopics);
-                  }
+          {/* lastCheckedIndexRef is now a top-level hook, per React rules */}
+          <button
+            className="btn"
+            style={{
+              marginBottom: '1rem',
+              background: selectedTopics.length === 0 ? '#444' : '',
+              color: selectedTopics.length === 0 ? '#ccc' : '',
+              cursor: selectedTopics.length === 0 ? 'not-allowed' : 'pointer',
+              opacity: selectedTopics.length === 0 ? 0.6 : 1
+            }}
+            disabled={selectedTopics.length === 0}
+            onClick={() => {
+              if (onTopicSelected && selectedTopics.length > 0) {
+                // If only one topic is selected, pass as string; else pass array
+                if (selectedTopics.length === 1) {
+                  onTopicSelected(selectedTopics[0]);
+                } else {
+                  onTopicSelected(selectedTopics);
                 }
-              }}
-            >
-              Fetch All Selected
-            </button>
-          )}
+              }
+            }}
+          >
+            Fetch All Selected
+          </button>
           <h3>Related Topics</h3>
           <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
             Related topics count: {relatedTopics.length}
@@ -125,15 +133,32 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
           <table className="kw-table" style={{ width: '100%', borderCollapse: 'collapse', background: 'var(--color-surface)' }}>
             <thead>
               <tr>
-                <th style={{ cursor: 'pointer' }} onClick={() => handleSort('keyword')}>
-                  Topic {sortBy === 'keyword' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                <th style={{ textAlign: 'left', padding: '0.5rem 1rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedTopics.length === sortedTopics.length && sortedTopics.length > 0}
+                    indeterminate={selectedTopics.length > 0 && selectedTopics.length < sortedTopics.length ? "true" : undefined}
+                    style={{ width: 15, height: 15, marginRight: '0.5rem' }}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setSelectedTopics(sortedTopics.map(t => t.keyword));
+                      } else {
+                        setSelectedTopics([]);
+                      }
+                    }}
+                  />
+                </th>
+                <th style={{ cursor: 'pointer', textAlign: 'left', paddingLeft: 0 }} onClick={() => handleSort('keyword')}>
+                    Topic {sortBy === 'keyword' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                 </th>
                 <th style={{ cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('volume')}>
                   Search Volume {sortBy === 'volume' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                 </th>
-                <th style={{ cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('kd')}>
+
+                <th style={{ cursor: 'pointer', textAlign: 'center', width: 40 }} onClick={() => handleSort('kd')}>
                   KD {sortBy === 'kd' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                 </th>
+
                 <th style={{ textAlign: 'center' }}>Action</th>
               </tr>
             </thead>
@@ -145,16 +170,31 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
                       type="checkbox"
                       checked={selectedTopics.includes(item.keyword)}
                       style={{ width: 15, height: 15, marginRight: '0.5rem' }}
-                      onChange={e => {
-                        if (e.target.checked) {
-                          setSelectedTopics([...selectedTopics, item.keyword]);
+                      onClick={e => {
+                        if (e.shiftKey && lastCheckedIndexRef.current !== null) {
+                          const start = Math.min(lastCheckedIndexRef.current, idx);
+                          const end = Math.max(lastCheckedIndexRef.current, idx);
+                          const rangeKeywords = sortedTopics.slice(start, end + 1).map(t => t.keyword);
+                          let newSelected;
+                          if (e.target.checked) {
+                            newSelected = Array.from(new Set([...selectedTopics, ...rangeKeywords]));
+                          } else {
+                            newSelected = selectedTopics.filter(t => !rangeKeywords.includes(t));
+                          }
+                          setSelectedTopics(newSelected);
                         } else {
-                          setSelectedTopics(selectedTopics.filter(t => t !== item.keyword));
+                          if (e.target.checked) {
+                            setSelectedTopics([...selectedTopics, item.keyword]);
+                          } else {
+                            setSelectedTopics(selectedTopics.filter(t => t !== item.keyword));
+                          }
                         }
+                        lastCheckedIndexRef.current = idx;
                       }}
+                      onChange={() => {}}
                     />
                   </td>
-                  <td style={{ padding: '0.5rem 1rem' }}>{item.keyword}</td>
+                  <td style={{ padding: '0.5rem 1rem 0.5rem 0' }}>{item.keyword}</td>
                   <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>{item.volume.toLocaleString()}</td>
                   <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>{item.kd !== null && item.kd !== undefined ? item.kd : '-'}</td>
                   <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>
@@ -165,6 +205,26 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={4} style={{ textAlign: 'left', padding: '0.5rem 0 0.5rem 16px' }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedTopics.length === sortedTopics.length && sortedTopics.length > 0}
+                    indeterminate={selectedTopics.length > 0 && selectedTopics.length < sortedTopics.length ? "true" : undefined}
+                    style={{ width: 15, height: 15, marginRight: '1rem' }}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setSelectedTopics(sortedTopics.map(t => t.keyword));
+                      } else {
+                        setSelectedTopics([]);
+                      }
+                    }}
+                  />
+                  Select/Deselect All
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}

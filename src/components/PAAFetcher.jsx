@@ -4,6 +4,9 @@ import Modal from './Modal';
 
 
 const PAAFetcher = ({ topic }) => {
+  // Track copied and popup state for each topicItem (multi-topic mode)
+  const [copiedTopics, setCopiedTopics] = useState({});
+  const [popupTopics, setPopupTopics] = useState({});
   // Support multiple topics
   const [multiTopics, setMultiTopics] = useState([]);
   useEffect(() => {
@@ -509,7 +512,7 @@ if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
         </button>
         {exportError && <div style={{ color: 'red', marginTop: '0.5rem' }}>{exportError}</div>}
       </div>
-      <div style={{ marginBottom: '1rem' }}>
+      <div style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
         <button onClick={() => setModalOpen(true)}>
           Show Full Prefiltered PAA List
         </button>
@@ -571,9 +574,67 @@ if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
             });
             topicWordGroups['Main Silo'] = topicSingleItems;
             const topicSortedGroupKeys = ['Main Silo', ...Object.keys(topicWordGroups).filter(k => k !== 'Main Silo').sort((a, b) => topicWordGroups[b].length - topicWordGroups[a].length)];
+
+            // Helper for copy logic per topic (use top-level state)
+            const copied = !!copiedTopics[topicItem];
+            const showPopup = !!popupTopics[topicItem];
+            const handleCopySilo = () => {
+              const allQs = topicSortedGroupKeys.flatMap(word => topicWordGroups[word]);
+              const text = allQs.join('\n');
+              navigator.clipboard.writeText(text).then(() => {
+                setCopiedTopics(prev => ({ ...prev, [topicItem]: true }));
+                setPopupTopics(prev => ({ ...prev, [topicItem]: true }));
+                setTimeout(() => {
+                  setCopiedTopics(prev => ({ ...prev, [topicItem]: false }));
+                  setPopupTopics(prev => ({ ...prev, [topicItem]: false }));
+                }, 1500);
+              });
+            };
+
             return (
-              <div key={topicItem} style={{ marginBottom: '2rem', border: '2px solid #444', borderRadius: '8px', padding: '1rem' }}>
-                <h3 style={{ color: '#fff' }}>Silo: {topicItem}</h3>
+              <div key={topicItem} style={{ marginBottom: '2rem', border: '2px solid #444', borderRadius: '8px', padding: '1rem', position: 'relative' }}>
+                {/* Popup confirmation */}
+                {showPopup && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 10,
+                    right: 50,
+                    background: '#333',
+                    color: '#fff',
+                    padding: '6px 16px',
+                    borderRadius: '6px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                    fontSize: '1rem',
+                    zIndex: 10,
+                    transition: 'opacity 0.3s',
+                    opacity: showPopup ? 1 : 0
+                  }}>
+                    Copied!
+                  </div>
+                )}
+                <h3 style={{ color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  Silo: {topicItem}
+                  <button
+                    onClick={handleCopySilo}
+                    title="Copy all questions in this silo"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: '1rem', padding: 0, display: 'flex', alignItems: 'center' }}
+                  >
+                    {copied ? (
+                      // Checkmark icon
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="12" cy="12" r="10" fill="#4caf50" />
+                        <path d="M7 13l3 3 6-6" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    ) : (
+                      // Copy icon
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="7" y="3" width="10" height="14" rx="2" fill="#bbb" stroke="#888" strokeWidth="1.5"/>
+                        <rect x="3" y="7" width="10" height="14" rx="2" fill="#222" stroke="#888" strokeWidth="1.5"/>
+                        <rect x="7" y="3" width="10" height="14" rx="2" fill="#bbb" opacity="0.7"/>
+                      </svg>
+                    )}
+                  </button>
+                </h3>
                 <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
                   PAA count: {topicQuestions.length}
                 </div>
@@ -661,7 +722,9 @@ if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
       ) : null}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Full Prefiltered PAA List">
         <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
-          Unfiltered PAA count: {prefilteredPAAs.length}
+          Unfiltered PAA count: {multiTopics.length > 1 && typeof paaQuestions === 'object'
+            ? Object.values(paaQuestions).reduce((acc, arr) => acc + arr.length, 0)
+            : prefilteredPAAs.length}
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', background: '#222', color: '#fff', marginBottom: '2rem' }}>
           <thead>
@@ -670,7 +733,10 @@ if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
             </tr>
           </thead>
           <tbody>
-            {prefilteredPAAs.map((q, idx) => (
+            {(multiTopics.length > 1 && typeof paaQuestions === 'object'
+              ? Object.values(paaQuestions).flat()
+              : prefilteredPAAs
+            ).map((q, idx) => (
               <tr key={'prefiltered-' + idx}>
                 <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{q.replace(/^\*\s*/, '')}</td>
               </tr>
