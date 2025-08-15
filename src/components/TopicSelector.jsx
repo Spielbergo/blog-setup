@@ -100,7 +100,7 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
         </div>
       )}
       {error && <div style={{ color: 'red', marginTop: '1rem' }}>{error}</div>}
-      {relatedTopics.length > 0 && (
+      {relatedTopics.length > 0 ? (
         <div style={{ marginTop: '1rem', overflowX: 'auto' }}>
           {/* lastCheckedIndexRef is now a top-level hook, per React rules */}
           <button
@@ -227,7 +227,11 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
             </tfoot>
           </table>
         </div>
-      )}
+      ) : (!loading && mainTopic && (
+        <div style={{ marginTop: '2rem', color: '#aaa', fontStyle: 'italic', textAlign: 'center' }}>
+          No related topics found
+        </div>
+      ))}
     </div>
   );
 };

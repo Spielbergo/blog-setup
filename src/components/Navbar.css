@@ -1,0 +1,52 @@
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 1rem;
+  min-height: 48px;
+  background: #222;
+}
+
+.navbar-title {
+  flex-grow: 1;
+  text-align: left;
+  color: white;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.navbar-btn {
+  font-weight: bold;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  background: #4285F4;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.navbar-btn-signout {
+  margin-right: 1rem;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  background: #eee;
+  color: #333;
+  border: none;
+  cursor: pointer;
+}
+
+.navbar-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #4285F4;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.2rem;
+}

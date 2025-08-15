@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import './Navbar.css';
 
 const Navbar = () => {
   const [isGoogleAuthed, setIsGoogleAuthed] = useState(false);
@@ -34,29 +35,23 @@ const Navbar = () => {
     setUserName('');
   };
 
-  const navbarStyle = {
-    position: 'sticky',
-    top: 0,
-    zIndex: 1000,
-    display: 'flex',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    padding: '1rem',
-    minHeight: '48px',
-    background: '#222',
-  };
+  // Styles moved to Navbar.css
 
   return (
-    <div style={navbarStyle}>
-        <div style={{ flexGrow: 1, textAlign: 'left', color: 'white', fontSize: '1.2rem', fontWeight: 'bold' }}>
-          Blog Silo Setup Tool
-          </div>
+    <div className="navbar">
+      <div className="navbar-title">
+        Blog Silo Setup Tool
+      </div>
       {!isGoogleAuthed ? (
-        <button onClick={handleGoogleSignIn} style={{ fontWeight: 'bold', padding: '0.5rem 1rem', borderRadius: '20px', background: '#4285F4', color: 'white', border: 'none', cursor: 'pointer' }}>Sign in with Google</button>
+        <button className="navbar-btn" onClick={handleGoogleSignIn}>
+          Sign in with Google
+        </button>
       ) : (
         <>
-          <button onClick={handleGoogleSignOut} style={{ marginRight: '1rem', padding: '0.5rem 1rem', borderRadius: '20px', background: '#eee', color: '#333', border: 'none', cursor: 'pointer' }}>Sign out</button>
-          <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#4285F4', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '1.2rem' }}>
+          <button className="navbar-btn-signout" onClick={handleGoogleSignOut}>
+            Sign out
+          </button>
+          <div className="navbar-avatar">
             {userName ? userName.charAt(0).toUpperCase() : '?'}
           </div>
         </>
