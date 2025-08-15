@@ -37,7 +37,10 @@ app.get('/', (req, res) => {
 // Google OAuth2 client setup
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'https://blog-setup-server.onrender.com/api/auth/google/callback';
+let REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'https://blog-setup-server.onrender.com/api/auth/google/callback';
+// Normalize double slashes except after https://
+REDIRECT_URI = REDIRECT_URI.replace(/([^:]\/)\/+/, '$1/');
+REDIRECT_URI = REDIRECT_URI.replace(/([^:]\/)\/+/, '$1/'); // run twice in case of multiple
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
 function getOAuth2Client(req) {
