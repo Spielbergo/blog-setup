@@ -27,6 +27,11 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'supersecret',
   resave: false,
   saveUninitialized: true,
+  cookie: {
+    sameSite: 'none', 
+    secure: true,     
+    httpOnly: true,
+  }
 }));
 
 // Server Status
