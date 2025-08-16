@@ -50,3 +50,8 @@
   font-weight: bold;
   font-size: 1.2rem;
 }
+
+.sheets-status-hover:hover #signout-btn {
+    opacity: 1;
+    pointer-events: auto;
+}
