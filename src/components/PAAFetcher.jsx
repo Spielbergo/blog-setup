@@ -411,15 +411,21 @@ if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
         wordGroups[group].forEach(q => rows.push(['', q]));
         rows.push(['']);
       });
-      // Google Sheets API: batchUpdate (dummy range, use selectedTab)
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${selectedSheet}/values/${selectedTab}!A1:append?valueInputOption=RAW&key=${sheetApiKey}`;
-      const body = { values: rows };
+      // Send to backend for OAuth2-authenticated write
+      const url = 'https://blog-setup-server.onrender.com/api/sheets/write';
+      const body = {
+        sheetId: selectedSheet,
+        tab: selectedTab,
+        values: rows
+      };
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(body)
       });
-      if (!res.ok) throw new Error('Google Sheets API error');
+      const result = await res.json();
+      if (!res.ok || !result.success) throw new Error(result.error || 'Google Sheets write error');
       setExporting(false);
       alert('Exported to Google Sheets!');
     } catch (err) {

@@ -69,10 +69,25 @@ const Navbar = () => {
           >
             {checkingServer ? 'Checking...' : 'Check Server Status'}
           </button>
-          {serverStatus === 'online' && (
+          {checkingServer && (
+            <span style={{ color: '#ffa726', fontWeight: 'bold', marginRight: '0.5rem', display: 'flex', alignItems: 'center' }}>
+              <span className="loader-spinner" style={{
+                display: 'inline-block',
+                width: '18px',
+                height: '18px',
+                border: '3px solid #ffa726',
+                borderTop: '3px solid #22242c',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                marginRight: '0.5rem'
+              }}></span>
+              Waking up server, please wait...
+            </span>
+          )}
+          {serverStatus === 'online' && !checkingServer && (
             <span style={{ color: '#4caf50', fontWeight: 'bold', marginRight: '0.5rem' }}>Server Online</span>
           )}
-          {serverStatus === 'offline' && (
+          {serverStatus === 'offline' && !checkingServer && (
             <span style={{ color: '#e53935', fontWeight: 'bold', marginRight: '0.5rem' }}>Server Offline</span>
           )}
           <button className="navbar-btn" onClick={handleGoogleSignIn}>
@@ -91,6 +106,11 @@ const Navbar = () => {
             <div style={{ color: '#4caf50', fontSize: '0.95rem', marginTop: '0.25rem', fontWeight: 'bold' }}>
               Connected to Google Sheets
             </div>
+            {userName && (
+              <div style={{ color: '#fff', fontSize: '0.95rem', marginTop: '0.15rem', fontWeight: 'bold' }}>
+                Signed in as {userName.split(' ')[0]}
+              </div>
+            )}
           </div>
         </>
       )}
