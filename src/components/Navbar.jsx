@@ -69,7 +69,7 @@ const Navbar = () => {
 
   return (
     <div className="navbar">
-      <div className="navbar-title">Blog Silo Setup Tool</div>
+      <div className="navbar-title">Blog Silo Setup Tool <span style={{ fontSize: '0.8rem', color: '#aaa', fontWeight: 'normal' }}>1. Make sure server is running &nbsp; 2. Sign in only needed to connect to Google Sheets</span></div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
         <button
           className="navbar-btn"
@@ -109,7 +109,7 @@ const Navbar = () => {
       {isGoogleAuthed && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
           <div
-            style={{ color: '#4caf50', fontSize: '0.95rem', marginTop: '0.25rem', fontWeight: 'bold', cursor: 'pointer', position: 'relative' }}
+            style={{ color: '#4caf50', fontSize: '0.95rem', marginTop: '0.25rem', fontWeight: 'bold', cursor: 'pointer', position: 'relative', marginRight: 20 }}
             className="sheets-status-hover"
           >
             Connected to Google Sheets
