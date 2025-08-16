@@ -9,7 +9,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
-import session from 'express-session';
+import jwt from 'jsonwebtoken';
 import path from 'path';
 import { google } from 'googleapis';
 
@@ -23,17 +23,7 @@ app.use(cors({
 app.use(express.json());
 
 // Session middleware for storing tokens
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'supersecret',
-  resave: false,
-  saveUninitialized: true,
-  cookie: {
-    sameSite: 'none', 
-    secure: true,     
-    httpOnly: true,
-    domain: '.onrender.com',
-  }
-}));
+const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwt1963';
 
 // Server Status
 app.get('/', (req, res) => {
@@ -72,10 +62,9 @@ app.get('/api/auth/google/callback', async (req, res) => {
   if (!code) return res.status(400).send('Missing code');
   try {
     const { tokens } = await oauth2Client.getToken(code);
-    req.session.tokens = tokens;
+    oauth2Client.setCredentials(tokens);
     // Get user info from Google
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
-    oauth2Client.setCredentials(tokens);
     let name = '';
     try {
       const userinfo = await oauth2.userinfo.get();
@@ -83,41 +72,63 @@ app.get('/api/auth/google/callback', async (req, res) => {
     } catch {
       name = '';
     }
-    req.session.userName = name;
-    res.send('<script>window.close();</script>Authentication successful! You can close this window.');
+    // Create JWT with tokens and name
+    const jwtPayload = { tokens, name };
+    const jwtToken = jwt.sign(jwtPayload, JWT_SECRET, { expiresIn: '2h' });
+    // Send JWT to frontend via window.opener
+    res.send(`<script>
+      if (window.opener) {
+        window.opener.postMessage({ jwt: '${jwtToken}', name: '${name}' }, '*');
+        window.close();
+      } else {
+        document.body.innerText = 'Authentication successful! Please close this window.';
+      }
+    </script>`);
   } catch (err) {
     res.status(500).send('OAuth2 Error: ' + err.message);
   }
 });
 
-// Auth status endpoint
+// Auth status endpoint (JWT-based)
 app.get('/api/auth/status', (req, res) => {
-  if (req.session.tokens) {
-    res.json({ authed: true, name: req.session.userName || '' });
-  } else {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.json({ authed: false });
+  }
+  const token = authHeader.split(' ')[1];
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    res.json({ authed: true, name: payload.name || '' });
+  } catch {
     res.json({ authed: false });
   }
 });
 
-// Logout endpoint
+// Logout endpoint (JWT-based, just instruct frontend to remove JWT)
 app.post('/api/auth/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.json({ success: true });
-  });
+  res.json({ success: true });
 });
 
-// --- Google Sheets Write Endpoint ---
+// --- Google Sheets Write Endpoint (JWT-based) ---
 app.post('/api/sheets/write', async (req, res) => {
   const { sheetId, tab, values } = req.body;
+  const authHeader = req.headers.authorization;
   if (!sheetId || !tab || !Array.isArray(values)) {
     return res.status(400).json({ error: 'Missing sheetId, tab, or values' });
   }
-  if (!req.session.tokens) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Not authenticated with Google' });
+  }
+  const token = authHeader.split(' ')[1];
+  let payload;
+  try {
+    payload = jwt.verify(token, JWT_SECRET);
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token' });
   }
   try {
     const oauth2Client = getOAuth2Client(req);
-    oauth2Client.setCredentials(req.session.tokens);
+    oauth2Client.setCredentials(payload.tokens);
     const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
     const range = `${tab}!A1`;
     await sheets.spreadsheets.values.append({

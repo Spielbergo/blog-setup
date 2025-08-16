@@ -403,6 +403,12 @@ if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
   async function exportToGoogleSheets() {
     setExporting(true);
     setExportError('');
+    const jwt = localStorage.getItem('googleJwt') || '';
+    if (!jwt) {
+      setExportError('Not authenticated with Google. Please sign in.');
+      setExporting(false);
+      return;
+    }
     try {
       // Prepare data: each group as a section, each question as a row
       const rows = [];
@@ -420,8 +426,10 @@ if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
       };
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${jwt}`,
+        },
         body: JSON.stringify(body)
       });
       const result = await res.json();

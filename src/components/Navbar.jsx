@@ -7,10 +7,20 @@ const Navbar = () => {
   const [serverStatus, setServerStatus] = useState(null); // null, 'online', 'offline'
   const [checkingServer, setCheckingServer] = useState(false);
 
+  // JWT state
+  const [jwt, setJwt] = useState(() => localStorage.getItem('googleJwt') || '');
+
   useEffect(() => {
     async function checkAuth() {
+      if (!jwt) {
+        setIsGoogleAuthed(false);
+        setUserName('');
+        return;
+      }
       try {
-        const res = await fetch('https://blog-setup-server.onrender.com/api/auth/status', { credentials: 'include' });
+        const res = await fetch('https://blog-setup-server.onrender.com/api/auth/status', {
+          headers: { Authorization: `Bearer ${jwt}` },
+        });
         if (res.ok) {
           const data = await res.json();
           setIsGoogleAuthed(data.authed);
@@ -25,6 +35,20 @@ const Navbar = () => {
       }
     }
     checkAuth();
+  }, [jwt]);
+
+  // Listen for JWT from OAuth popup
+  useEffect(() => {
+    function handleMessage(e) {
+      if (e.data && e.data.jwt) {
+        setJwt(e.data.jwt);
+        localStorage.setItem('googleJwt', e.data.jwt);
+        setIsGoogleAuthed(true);
+        setUserName(e.data.name || '');
+      }
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
   }, []);
 
   const handleGoogleSignIn = () => {
@@ -49,9 +73,16 @@ const Navbar = () => {
   };
 
   const handleGoogleSignOut = async () => {
-    await fetch('https://blog-setup-server.onrender.com/api/auth/logout', { method: 'POST', credentials: 'include' });
+    if (jwt) {
+      await fetch('https://blog-setup-server.onrender.com/api/auth/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${jwt}` },
+      });
+    }
     setIsGoogleAuthed(false);
     setUserName('');
+    setJwt('');
+    localStorage.removeItem('googleJwt');
   };
 
   return (
