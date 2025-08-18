@@ -84,15 +84,33 @@ app.get('/api/auth/google/callback', async (req, res) => {
     // Create JWT with tokens and name
     const jwtPayload = { tokens, name };
     const jwtToken = jwt.sign(jwtPayload, JWT_SECRET, { expiresIn: '2h' });
-    // Send JWT to frontend via window.opener
-    res.send(`<script>
-      if (window.opener) {
-        window.opener.postMessage({ jwt: '${jwtToken}', name: '${name}' }, '*');
-        window.close();
-      } else {
-        document.body.innerText = 'Authentication successful! Please close this window.';
-      }
-    </script>`);
+    // Send JWT to frontend via window.opener if opened as a popup; else render a page with a link back
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Authentication Complete</title>
+  <style>body{font-family: Arial, sans-serif; background:#111; color:#eee; display:flex; align-items:center; justify-content:center; height:100vh; margin:0} .card{background:#1c1c1c; padding:24px 28px; border-radius:8px; box-shadow:0 6px 24px rgba(0,0,0,.4)} a{color:#4caf50}</style>
+  <script>
+    (function(){
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ jwt: '${jwtToken}', name: '${name}' }, '*');
+          setTimeout(function(){ window.close(); }, 50);
+        }
+      } catch (e) {}
+    })();
+  </script>
+  </head>
+  <body>
+    <div class="card">
+      <div>Authentication successful.</div>
+      <div style="margin-top:8px">You can close this window. If it did not close automatically, <a href="https://blog-setup.onrender.com" rel="opener">return to the app</a>.</div>
+    </div>
+  </body>
+</html>`;
+    res.send(html);
   } catch (err) {
     res.status(500).send('OAuth2 Error: ' + err.message);
   }

@@ -56,7 +56,36 @@ const Navbar = () => {
 
   // Google sign in
   const handleGoogleSignIn = () => {
-    window.location.href = 'https://blog-setup-server.onrender.com/api/auth/google';
+    const authUrl = 'https://blog-setup-server.onrender.com/api/auth/google';
+    const w = 520, h = 640;
+    const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : window.screenX;
+    const dualScreenTop = window.screenTop !== undefined ? window.screenTop : window.screenY;
+    const width = window.innerWidth || document.documentElement.clientWidth || screen.width;
+    const height = window.innerHeight || document.documentElement.clientHeight || screen.height;
+    const systemZoom = width / window.screen.availWidth;
+    const left = (width - w) / 2 / systemZoom + dualScreenLeft;
+    const top = (height - h) / 2 / systemZoom + dualScreenTop;
+    const popup = window.open(
+      authUrl,
+      'google-oauth',
+      `scrollbars=yes,width=${w / systemZoom},height=${h / systemZoom},top=${top},left=${left}`
+    );
+    if (!popup) return;
+    const handler = (ev) => {
+      // Optionally restrict origin; Render.com server origin starts with https://blog-setup-server.onrender.com
+      try {
+        const data = ev.data || {};
+        if (data && data.jwt) {
+          localStorage.setItem('googleJwt', data.jwt);
+          setJwt(data.jwt);
+          setIsGoogleAuthed(true);
+          setUserName(data.name || '');
+          window.removeEventListener('message', handler);
+          try { popup.close(); } catch {}
+        }
+      } catch {}
+    };
+    window.addEventListener('message', handler);
   };
 
   // Google sign out
