@@ -681,8 +681,71 @@ const PAAFetcher = ({ topic }) => {
       titleCell: 'B10',
       titleValue: headerTitle,
     };
-    // ...existing code...
+    const jwt = localStorage.getItem('googleJwt') || '';
+    if (!jwt) {
+      throw new Error('Not signed in to Google. Click "Sign in with Google" first.');
+    }
+    const res = await fetch('https://blog-setup-server.onrender.com/api/sheets/duplicate-and-write', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${jwt}`,
+      },
+      body: JSON.stringify(body),
+    });
+    if (res.status === 401) {
+      // Clear invalid token and notify navbar to refresh UI
+      localStorage.removeItem('googleJwt');
+      window.dispatchEvent(new Event('googleJwtChanged'));
+      throw new Error('Your Google session expired. Please sign in again.');
+    }
+    if (!res.ok) {
+      let msg = 'Export failed';
+      try {
+        const data = await res.json();
+        msg = data?.error || data?.details || msg;
+      } catch {}
+      throw new Error(msg);
+    }
+    return res.json();
   }
+
+  // Export grouped questions to Google Sheets (duplicate Template -> write at B11)
+  const exportToGoogleSheets = async () => {
+    setExportError('');
+    if (!selectedSheet) {
+      setExportError('Please select a Google Sheet.');
+      return;
+    }
+    if (!templateExists) {
+      setExportError('Template tab not found in this sheet.');
+      return;
+    }
+    try {
+      setExporting(true);
+      if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
+        // Export each topic as its own tab
+        for (const topicItem of multiTopics) {
+          const arr = paaQuestions[topicItem] || [];
+          if (!arr || arr.length === 0) continue;
+          await writeOne(topicItem, arr);
+        }
+      } else {
+        // Single-topic or pasted list
+        const baseTopic = Array.isArray(topic) ? (topic[0] || '') : (topic || 'Silo');
+        const list = dedupedQuestions && dedupedQuestions.length > 0 ? dedupedQuestions : [];
+        if (list.length === 0) {
+          setExportError('Nothing to export. Fetch or paste some questions first.');
+        } else {
+          await writeOne(baseTopic, list);
+        }
+      }
+    } catch (err) {
+      setExportError(err?.message || 'Export failed.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div style={{ marginTop: '2rem' }}>
