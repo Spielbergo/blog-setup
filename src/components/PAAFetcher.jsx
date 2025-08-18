@@ -132,6 +132,9 @@ const PAAFetcher = ({ topic }) => {
           }
         }
 
+        // Apply custom filters per topic
+        filteredPAAs = applyCustomFiltersForTopic(topicItem, filteredPAAs);
+
         // Gemini brand/celebrity filter per-topic
         if (geminiApiKey && filteredPAAs.length > 0) {
           try {
@@ -515,6 +518,91 @@ const PAAFetcher = ({ topic }) => {
       .trim();
   }
 
+  // ===== Custom filtering helpers =====
+  function normalizeText(str) {
+    return String(str || '')
+      .toLowerCase()
+      .replace(/[_`~!@#$%^&*()\-+={}[\]|\\:;"'<>,./?]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function hasBestOrTopRated(q) {
+    const s = normalizeText(q);
+    if (/\bwhat (is|are) the best\b/.test(s)) return true;
+    if (/\b(best|top rated|top-rated|top 10|top10|highest rated)\b/.test(s)) return true;
+    if (/\bmost popular\b/.test(s)) return true;
+    return false;
+  }
+
+  function isTrendQuestion(q) {
+    const s = normalizeText(q);
+    return /\b(trend|trending|right now|current|hottest|biggest trend|in \d{4})\b/.test(s);
+  }
+
+  function isAttractionPreference(q) {
+    const s = normalizeText(q);
+    return /\b(men|guys|boys)\b/.test(s) && /\b(prefer|like|find|attracts?|attractive|seductive)\b/.test(s);
+  }
+
+  function topicCoreTokens(topicStr) {
+    const s = normalizeText(topicStr)
+      .replace(/^best\s+/, ' ')
+      .replace(/^top rated\s+/, ' ')
+      .replace(/^top\s+/, ' ')
+      .replace(/^most popular\s+/, ' ')
+      .trim();
+    const tokens = s.split(/\s+/).filter(Boolean);
+    const drop = new Set(['best', 'top', 'rated', 'most', 'popular']);
+    return tokens.filter(t => !drop.has(t));
+  }
+
+  function questionContainsAllTokens(q, tokens) {
+    const s = ' ' + normalizeText(q) + ' ';
+    return tokens.every(tok => {
+      if (!tok || tok.length < 2) return true;
+      const re = new RegExp(`\\b${tok}(s)?\\b`, 'i');
+      return re.test(s);
+    });
+  }
+
+  function canonicalizeForDedup(q) {
+    let s = ' ' + normalizeText(q) + ' ';
+    s = s
+      .replace(/\bis it (ok|okay|good) to\b/g, ' to ')
+      .replace(/\bis it (ok|okay|good)\b/g, ' ')
+      .replace(/\bshould (i|you)\b/g, ' ')
+      .replace(/\bcan (i|you)\b/g, ' ')
+      .replace(/\bdo (i|you) need\b/g, ' need ')
+      .replace(/\bapply\b/g, ' use ')
+      .replace(/\bput\b/g, ' use ')
+      .replace(/\beveryday\b/g, ' every day ')
+      .replace(/\bon (my|your) lips\b/g, ' on lips ')
+      .replace(/\b(for|on) (my|your) lips\b/g, ' for lips ')
+      .replace(/\b(okay|ok)\b/g, ' good ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return s;
+  }
+
+  function applyCustomFiltersForTopic(topicItem, list) {
+    const core = topicCoreTokens(topicItem);
+    let arr = (list || []).filter(q => !hasBestOrTopRated(q) && !isTrendQuestion(q) && !isAttractionPreference(q));
+    if (core.length > 0) {
+      arr = arr.filter(q => questionContainsAllTokens(q, core));
+    }
+    const seen = new Set();
+    const unique = [];
+    for (const q of arr) {
+      const key = canonicalizeForDedup(q);
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(q);
+      }
+    }
+    return unique;
+  }
+
   async function exportToGoogleSheets() {
     setExporting(true);
     setExportError('');
@@ -553,13 +641,13 @@ const PAAFetcher = ({ topic }) => {
             titleValue: headerTitle,
         };
         const res = await fetch(endpoint, { method: 'POST', headers: commonHeaders, body: JSON.stringify(body) });
-        // Handle auth errors: clear token so Navbar updates and user can sign in again
-        if (res.status === 401) {
-          localStorage.removeItem('googleJwt');
-          window.dispatchEvent(new Event('googleJwtChanged'));
-        }
+          // Handle auth errors: clear token so Navbar updates and user can sign in again
+          if (res.status === 401) {
+            localStorage.removeItem('googleJwt');
+            window.dispatchEvent(new Event('googleJwtChanged'));
+          }
         const result = await res.json().catch(() => ({}));
-        if (!res.ok || !result.success) throw new Error(result.error || (res.status === 401 ? 'Invalid or expired token' : 'Google Sheets write error'));
+          if (!res.ok || !result.success) throw new Error(result.error || (res.status === 401 ? 'Invalid or expired token' : 'Google Sheets write error'));
         return result;
       };
 

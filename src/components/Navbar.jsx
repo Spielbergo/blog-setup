@@ -4,7 +4,6 @@ import './Navbar.css';
 const Navbar = () => {
   const [isGoogleAuthed, setIsGoogleAuthed] = useState(false);
   const [userName, setUserName] = useState('');
-  // Removed server status feature
 
   // JWT state
   const [jwt, setJwt] = useState(() => localStorage.getItem('googleJwt') || '');
@@ -50,9 +49,6 @@ const Navbar = () => {
     window.addEventListener('googleJwtChanged', handler);
     return () => window.removeEventListener('googleJwtChanged', handler);
   }, []);
-
-  // Check server status
-  // Removed server status feature
 
   // Google sign in
   const handleGoogleSignIn = () => {
@@ -113,7 +109,7 @@ const Navbar = () => {
         )}
       </div>
       {isGoogleAuthed && (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', marginLeft: 15 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
             <span style={{ color: '#4caf50', fontSize: '0.95rem', fontWeight: 'bold' }}>Connected to Google Sheets</span>
             <button className="navbar-btn" onClick={handleGoogleSignOut} title="Sign out from Google">
