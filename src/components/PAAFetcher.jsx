@@ -437,8 +437,8 @@ const PAAFetcher = ({ topic }) => {
 
   // Google Sheets palette approximations for background colors (0..1 floats)
   // light magenta 3 and light magenta 2
-  const MAGENTA3 = { r: 244 / 255, g: 199 / 255, b: 244 / 255 }; // ~#ead1dc
-  const MAGENTA2 = { r: 248 / 255, g: 223 / 255, b: 246 / 255 }; // ~#d5a6bd
+  const MAGENTA3 = { r: 234 / 255, g: 209 / 255, b: 220 / 255 }; // #ead1dc
+  const MAGENTA2 = { r: 213 / 255, g: 166 / 255, b: 189 / 255 }; // #d5a6bd
 
   // Helper: group an array of questions into mini-silos like the UI and return
   // the ordered keys, groups map, flattened questions, and color bands metadata.
