@@ -15,6 +15,18 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
   // Persist last checked index for shift-click multi-select
   const lastCheckedIndexRef = useRef(null);
 
+  // Propagate selection to parent immediately
+  const propagateSelection = (topics) => {
+    if (!onTopicSelected) return;
+    if (!topics || topics.length === 0) {
+      onTopicSelected('');
+    } else if (topics.length === 1) {
+      onTopicSelected(topics[0]);
+    } else {
+      onTopicSelected(topics);
+    }
+  };
+
   const fetchRelatedTopicsGemini = async (topic) => {
     setLoading(true);
     setError('');
@@ -40,7 +52,16 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
   };
 
   const handleTopicChange = (e) => {
-    setMainTopic(e.target.value);
+    const value = e.target.value;
+    setMainTopic(value);
+    // If nothing is selected via checkboxes, reflect the manual input on the Fetch PAA button
+    if (selectedTopics.length === 0) {
+      if (value && value.trim()) {
+        onTopicSelected && onTopicSelected(value.trim());
+      } else {
+        onTopicSelected && onTopicSelected('');
+      }
+    }
   };
 
 
@@ -102,30 +123,6 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
       {error && <div style={{ color: 'red', marginTop: '1rem' }}>{error}</div>}
       {relatedTopics.length > 0 ? (
         <div style={{ marginTop: '1rem', overflowX: 'auto' }}>
-          {/* lastCheckedIndexRef is now a top-level hook, per React rules */}
-          <button
-            className="btn"
-            style={{
-              marginBottom: '1rem',
-              background: selectedTopics.length === 0 ? '#444' : '',
-              color: selectedTopics.length === 0 ? '#ccc' : '',
-              cursor: selectedTopics.length === 0 ? 'not-allowed' : 'pointer',
-              opacity: selectedTopics.length === 0 ? 0.6 : 1
-            }}
-            disabled={selectedTopics.length === 0}
-            onClick={() => {
-              if (onTopicSelected && selectedTopics.length > 0) {
-                // If only one topic is selected, pass as string; else pass array
-                if (selectedTopics.length === 1) {
-                  onTopicSelected(selectedTopics[0]);
-                } else {
-                  onTopicSelected(selectedTopics);
-                }
-              }
-            }}
-          >
-            Fetch All Selected
-          </button>
           <h3>Related Topics</h3>
           <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
             Related topics count: {relatedTopics.length}
@@ -141,9 +138,12 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
                     style={{ width: 15, height: 15, marginRight: '0.5rem' }}
                     onChange={e => {
                       if (e.target.checked) {
-                        setSelectedTopics(sortedTopics.map(t => t.keyword));
+                        const next = sortedTopics.map(t => t.keyword);
+                        setSelectedTopics(next);
+                        propagateSelection(next);
                       } else {
                         setSelectedTopics([]);
+                        propagateSelection([]);
                       }
                     }}
                   />
@@ -159,7 +159,7 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
                   KD {sortBy === 'kd' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                 </th>
 
-                <th style={{ textAlign: 'center' }}>Action</th>
+                {/* Removed Action column */}
               </tr>
             </thead>
             <tbody>
@@ -182,12 +182,16 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
                             newSelected = selectedTopics.filter(t => !rangeKeywords.includes(t));
                           }
                           setSelectedTopics(newSelected);
+                          propagateSelection(newSelected);
                         } else {
+                          let next;
                           if (e.target.checked) {
-                            setSelectedTopics([...selectedTopics, item.keyword]);
+                            next = [...selectedTopics, item.keyword];
                           } else {
-                            setSelectedTopics(selectedTopics.filter(t => t !== item.keyword));
+                            next = selectedTopics.filter(t => t !== item.keyword);
                           }
+                          setSelectedTopics(next);
+                          propagateSelection(next);
                         }
                         lastCheckedIndexRef.current = idx;
                       }}
@@ -197,11 +201,7 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
                   <td style={{ padding: '0.5rem 1rem 0.5rem 0' }}>{item.keyword}</td>
                   <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>{item.volume.toLocaleString()}</td>
                   <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>{item.kd !== null && item.kd !== undefined ? item.kd : '-'}</td>
-                  <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>
-                    <button className="btn" onClick={() => onTopicSelected(item.keyword)}>
-                      Select
-                    </button>
-                  </td>
+                  {/* Removed per-row Select button */}
                 </tr>
               ))}
             </tbody>
@@ -215,9 +215,12 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
                     style={{ width: 15, height: 15, marginRight: '1rem' }}
                     onChange={e => {
                       if (e.target.checked) {
-                        setSelectedTopics(sortedTopics.map(t => t.keyword));
+                        const next = sortedTopics.map(t => t.keyword);
+                        setSelectedTopics(next);
+                        propagateSelection(next);
                       } else {
                         setSelectedTopics([]);
+                        propagateSelection([]);
                       }
                     }}
                   />
