@@ -17,7 +17,11 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 app.use(cors({
-  origin: 'https://blog-setup.onrender.com',
+  origin: [
+    'https://blog-setup.onrender.com',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173'
+  ],
   credentials: true
 }));
 app.use(express.json());
@@ -28,6 +32,11 @@ const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwt1963';
 // Server Status
 app.get('/', (req, res) => {
   res.send('Blog Silo Setup API is running.');
+});
+
+// Explicit health/status endpoint for frontend checks
+app.get('/api/status', cors({ origin: '*', credentials: false }), (req, res) => {
+  res.json({ status: 'online', uptime: process.uptime(), timestamp: Date.now() });
 });
 
 // Google OAuth2 client setup
@@ -111,7 +120,7 @@ app.post('/api/auth/logout', (req, res) => {
 
 // --- Google Sheets Write Endpoint (JWT-based) ---
 app.post('/api/sheets/write', async (req, res) => {
-  const { sheetId, tab, values } = req.body;
+  const { sheetId, tab, values, startCell } = req.body;
   const authHeader = req.headers.authorization;
   if (!sheetId || !tab || !Array.isArray(values)) {
     return res.status(400).json({ error: 'Missing sheetId, tab, or values' });
@@ -130,16 +139,216 @@ app.post('/api/sheets/write', async (req, res) => {
     const oauth2Client = getOAuth2Client(req);
     oauth2Client.setCredentials(payload.tokens);
     const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
-    const range = `${tab}!A1`;
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: sheetId,
-      range,
-      valueInputOption: 'RAW',
-      requestBody: { values },
-    });
+    const range = `${tab}!${startCell && typeof startCell === 'string' ? startCell : 'A1'}`;
+    if (startCell) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: sheetId,
+        range,
+        valueInputOption: 'RAW',
+        requestBody: { values, majorDimension: 'ROWS' },
+      });
+    } else {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: sheetId,
+        range,
+        valueInputOption: 'RAW',
+        requestBody: { values },
+      });
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Google Sheets write error', details: err.message });
+  }
+});
+
+// Duplicate an existing tab and write values at a specific start cell
+// Body: { sheetId (spreadsheetId), sourceTab (title), newTabTitle (optional), startCell (e.g., "B5"), values, bands?, titleCell?, titleValue? }
+app.post('/api/sheets/duplicate-and-write', async (req, res) => {
+  const { sheetId, sourceTab, newTabTitle, startCell, values, bands, titleCell, titleValue } = req.body;
+  const authHeader = req.headers.authorization;
+  if (!sheetId || !sourceTab || !Array.isArray(values)) {
+    return res.status(400).json({ error: 'Missing sheetId, sourceTab, or values' });
+  }
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Not authenticated with Google' });
+  }
+  const token = authHeader.split(' ')[1];
+  let payload;
+  try {
+    payload = jwt.verify(token, JWT_SECRET);
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+  try {
+    const oauth2Client = getOAuth2Client(req);
+    oauth2Client.setCredentials(payload.tokens);
+    const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+
+    // Helper: parse an A1 notation like "B11" into zero-based row/column indices
+    function parseA1(a1) {
+      const m = String(a1 || 'A1').match(/^\s*([A-Za-z]+)(\d+)\s*$/);
+      if (!m) return { rowIndex: 0, columnIndex: 0 };
+      const letters = m[1].toUpperCase();
+      const row = parseInt(m[2], 10);
+      let colNum = 0;
+      for (let i = 0; i < letters.length; i++) {
+        colNum = colNum * 26 + (letters.charCodeAt(i) - 64); // A=1
+      }
+      return { rowIndex: Math.max(0, row - 1), columnIndex: Math.max(0, colNum - 1) };
+    }
+
+    // 1) Get sheet metadata to find source sheetId and to ensure unique target title
+    const meta = await sheets.spreadsheets.get({
+      spreadsheetId: sheetId,
+      fields: 'sheets.properties(sheetId,title,index)'
+    });
+    const props = meta.data.sheets?.map(s => s.properties) || [];
+    const sourceProps = props.find(p => p.title === sourceTab);
+    if (!sourceProps) {
+      return res.status(404).json({ error: `Source tab not found: ${sourceTab}` });
+    }
+
+    // 2) Copy the tab
+    const copyResp = await sheets.spreadsheets.sheets.copyTo({
+      spreadsheetId: sheetId,
+      sheetId: sourceProps.sheetId,
+      requestBody: { destinationSpreadsheetId: sheetId }
+    });
+    let targetSheetId = copyResp.data.sheetId;
+    let targetTitle = copyResp.data.title || `Copy of ${sourceTab}`;
+
+    // 3) Optionally rename the copied sheet; ensure uniqueness
+    if (newTabTitle && typeof newTabTitle === 'string' && newTabTitle.trim()) {
+      let desired = newTabTitle.trim();
+      const existingTitles = new Set(props.map(p => p.title));
+      if (existingTitles.has(desired)) {
+        desired = `${desired} (${Date.now().toString().slice(-4)})`;
+      }
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: {
+          requests: [
+            {
+              updateSheetProperties: {
+                properties: { sheetId: targetSheetId, title: desired },
+                fields: 'title'
+              }
+            }
+          ]
+        }
+      });
+      targetTitle = desired;
+    }
+
+    // 4) Write values starting at startCell (default A1)
+    const writeRange = `${targetTitle}!${startCell && typeof startCell === 'string' ? startCell : 'A1'}`;
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: sheetId,
+      range: writeRange,
+      valueInputOption: 'RAW',
+      requestBody: { values, majorDimension: 'ROWS' },
+    });
+
+    const requests = [];
+    const { rowIndex: startRowIndex, columnIndex: startColumnIndex } = parseA1(startCell || 'A1');
+
+    // 5) Apply background color bands to the written rows (e.g., per mini-silo)
+    if (Array.isArray(bands) && bands.length > 0) {
+      let runningOffset = 0;
+      for (const band of bands) {
+        const size = Number(band?.size) || 0;
+        const color = band?.color || null;
+        if (size <= 0 || !color) {
+          runningOffset += Math.max(0, size);
+          continue;
+        }
+        requests.push({
+          repeatCell: {
+            range: {
+              sheetId: targetSheetId,
+              startRowIndex: startRowIndex + runningOffset,
+              endRowIndex: startRowIndex + runningOffset + size,
+              startColumnIndex,
+              endColumnIndex: startColumnIndex + 1
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: {
+                  red: color.red ?? color.r ?? 0,
+                  green: color.green ?? color.g ?? 0,
+                  blue: color.blue ?? color.b ?? 0,
+                }
+              }
+            },
+            fields: 'userEnteredFormat.backgroundColor'
+          }
+        });
+        runningOffset += size;
+      }
+    }
+
+    // 6) Apply text formatting (Arial, size 12) to the question range we wrote
+    if (Array.isArray(values) && values.length > 0) {
+      requests.push({
+        repeatCell: {
+          range: {
+            sheetId: targetSheetId,
+            startRowIndex: startRowIndex,
+            endRowIndex: startRowIndex + values.length,
+            startColumnIndex,
+            endColumnIndex: startColumnIndex + 1
+          },
+          cell: {
+            userEnteredFormat: {
+              textFormat: { fontFamily: 'Arial', fontSize: 12 }
+            }
+          },
+          fields: 'userEnteredFormat.textFormat'
+        }
+      });
+    }
+
+    // 7) Optional title cell write and formatting (e.g., B10)
+    const titleA1 = typeof titleCell === 'string' && titleCell.trim() ? titleCell.trim() : null;
+    if (titleA1 && typeof titleValue === 'string' && titleValue.trim()) {
+      const titleRange = `${targetTitle}!${titleA1}`;
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: sheetId,
+        range: titleRange,
+        valueInputOption: 'RAW',
+        requestBody: { values: [[titleValue.trim()]], majorDimension: 'ROWS' },
+      });
+      const { rowIndex: titleRowIndex, columnIndex: titleColumnIndex } = parseA1(titleA1);
+      requests.push({
+        repeatCell: {
+          range: {
+            sheetId: targetSheetId,
+            startRowIndex: titleRowIndex,
+            endRowIndex: titleRowIndex + 1,
+            startColumnIndex: titleColumnIndex,
+            endColumnIndex: titleColumnIndex + 1
+          },
+          cell: {
+            userEnteredFormat: {
+              textFormat: { fontFamily: 'Arial', fontSize: 13, bold: true },
+              backgroundColor: { red: 1, green: 1, blue: 0 }
+            }
+          },
+          fields: 'userEnteredFormat.textFormat,userEnteredFormat.backgroundColor'
+        }
+      });
+    }
+
+    if (requests.length > 0) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: { requests }
+      });
+    }
+
+    res.json({ success: true, tabTitle: targetTitle, tabId: targetSheetId });
+  } catch (err) {
+    res.status(500).json({ error: 'Duplicate and write error', details: err.message });
   }
 });
 

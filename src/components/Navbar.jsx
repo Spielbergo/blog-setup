@@ -4,8 +4,7 @@ import './Navbar.css';
 const Navbar = () => {
   const [isGoogleAuthed, setIsGoogleAuthed] = useState(false);
   const [userName, setUserName] = useState('');
-  const [serverStatus, setServerStatus] = useState(null); // null, 'online', 'offline'
-  const [checkingServer, setCheckingServer] = useState(false);
+  // Removed server status feature
 
   // JWT state
   const [jwt, setJwt] = useState(() => localStorage.getItem('googleJwt') || '');
@@ -38,21 +37,7 @@ const Navbar = () => {
   }, [jwt]);
 
   // Check server status
-  const handleCheckServer = async () => {
-    setCheckingServer(true);
-    setServerStatus(null);
-    try {
-      const res = await fetch('https://blog-setup-server.onrender.com/api/status');
-      if (res.ok) {
-        setServerStatus('online');
-      } else {
-        setServerStatus('offline');
-      }
-    } catch {
-      setServerStatus('offline');
-    }
-    setCheckingServer(false);
-  };
+  // Removed server status feature
 
   // Google sign in
   const handleGoogleSignIn = () => {
@@ -69,37 +54,14 @@ const Navbar = () => {
 
   return (
     <div className="navbar">
-      <div className="navbar-title">Blog Silo Setup Tool <span style={{ fontSize: '0.8rem', color: '#aaa', fontWeight: 'normal' }}>1. Make sure server is running &nbsp; 2. Sign in only needed to connect to Google Sheets</span></div>
+      <div className="navbar-title">Blog Silo Setup Tool <span style={{ fontSize: '0.8rem', color: '#aaa', fontWeight: 'normal' }}>1. Make sure server is running &nbsp; 2. Sign in only needed to WRITE to Google Sheets</span></div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
         <button
           className="navbar-btn"
-          style={{ background: serverStatus === 'online' ? '#4caf50' : serverStatus === 'offline' ? '#e53935' : undefined, color: 'white', fontWeight: 'bold' }}
-          onClick={handleCheckServer}
-          disabled={checkingServer}
+          onClick={() => window.open('https://blog-setup-server.onrender.com', '_blank', 'noopener,noreferrer')}
         >
-          {checkingServer ? 'Checking...' : 'Check Server Status'}
+          Start Server
         </button>
-        {checkingServer && (
-          <span style={{ color: '#ffa726', fontWeight: 'bold', marginRight: '0.5rem', display: 'flex', alignItems: 'center' }}>
-            <span className="loader-spinner" style={{
-              display: 'inline-block',
-              width: '18px',
-              height: '18px',
-              border: '3px solid #ffa726',
-              borderTop: '3px solid #22242c',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-              marginRight: '0.5rem'
-            }}></span>
-            Waking up server, please wait...
-          </span>
-        )}
-        {serverStatus === 'online' && !checkingServer && (
-          <span style={{ color: '#4caf50', fontWeight: 'bold', marginRight: '0.5rem' }}>Server Online</span>
-        )}
-        {serverStatus === 'offline' && !checkingServer && (
-          <span style={{ color: '#e53935', fontWeight: 'bold', marginRight: '0.5rem' }}>Server Offline</span>
-        )}
         {!isGoogleAuthed && (
           <button className="navbar-btn" onClick={handleGoogleSignIn}>
             Sign in with Google

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Modal from './Modal';
 
-
 const PAAFetcher = ({ topic }) => {
   // Track copied and popup state for each topicItem (multi-topic mode)
   const [copiedTopics, setCopiedTopics] = useState({});
@@ -16,7 +15,7 @@ const PAAFetcher = ({ topic }) => {
       setMultiTopics([topic]);
     }
   }, [topic]);
-  // Get API key from .env
+  
   const sheetApiKey = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY || '';
   const sheetId1 = import.meta.env.VITE_GOOGLE_SHEETS_SHEET_ID_1 || '';
   const sheetId2 = import.meta.env.VITE_GOOGLE_SHEETS_SHEET_ID_2 || '';
@@ -24,7 +23,7 @@ const PAAFetcher = ({ topic }) => {
   const sheetId4 = import.meta.env.VITE_GOOGLE_SHEETS_SHEET_ID_4 || '';
   const sheetId5 = import.meta.env.VITE_GOOGLE_SHEETS_SHEET_ID_5 || '';
 
-  // Sheet IDs (move above useState)
+  // Sheet IDs
   const sheets = [
     { id: sheetId1, title: 'Lip Stuff' },
     { id: sheetId2, title: 'Shampoo' },
@@ -33,12 +32,11 @@ const PAAFetcher = ({ topic }) => {
     { id: sheetId5, title: 'Blue Kitchens' }
   ];
 
-  // Google Sheets Export (API key from .env, dropdowns for sheet/tab, Download CSV)
-  // Set initial sheet to first in list
   const [selectedSheet, setSelectedSheet] = useState(sheets[0]?.id || '');
-  const [selectedTab, setSelectedTab] = useState('');
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
+  const [templateExists, setTemplateExists] = useState(false);
+  // Automated export: always duplicate 'Template' and write starting at B11
 
   const [paaQuestions, setPaaQuestions] = useState([]);
   const [inputText, setInputText] = useState('');
@@ -316,64 +314,64 @@ const PAAFetcher = ({ topic }) => {
   }
   // Descriptive/how-to words to prioritize
   const priorityWords = [
-    'apply','remove','different','waterproof','prevent','cause','choose','compare','types','benefits','side effects','safe','natural','diy','tips','tricks','methods','ingredients','effective','permanent','temporary','price','cost','reviews','recommend','avoid','problems','solutions','strongest','actually','injections','permanently', 'color'
+    'apply','remove','different','waterproof','prevent','cause','choose','compare','types','benefit','effect','safe','natural','diy','tips','trick','method','ingredient','effective','permanent','temporary','price','cost','review','recommend','avoid','problem','solution','strongest','actually','injection','permanently', 'color'
   ];
 
   // Filter out stopwords from groupWords before grouping
   const validGroupWords = groupWords.filter(w => !stopwords.includes(w));
 
   // Group questions by validGroupWords, but filter out topic variants
-let wordGroups = {};
-let singleItems = [];
-const seenQuestions = new Set();
-let sortedGroupKeys = [];
-if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
-  // Multi-topic: group by topic, each topic gets its own silo
-  wordGroups = {};
-  sortedGroupKeys = [];
-  multiTopics.forEach(topicItem => {
-    const arr = paaQuestions[topicItem] || [];
-    if (arr.length > 0) {
-      wordGroups[topicItem] = arr;
-      sortedGroupKeys.push(topicItem);
-    }
-  });
-} else {
-  dedupedQuestions.forEach(q => {
-    const qLower = q.toLowerCase();
-    if (!topicVariants.some(v => qLower.includes(v))) return;
-    const words = qLower.split(/\W+/).filter(w => w && validGroupWords.includes(w));
-    const filteredWords = words.filter(w => !topicVariants.includes(w));
-    if (filteredWords.length === 0) {
-      if (!seenQuestions.has(q)) {
-        singleItems.push(q);
-        seenQuestions.add(q);
+  let wordGroups = {};
+  let singleItems = [];
+  const seenQuestions = new Set();
+  let sortedGroupKeys = [];
+  if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
+    // Multi-topic: group by topic, each topic gets its own silo
+    wordGroups = {};
+    sortedGroupKeys = [];
+    multiTopics.forEach(topicItem => {
+      const arr = paaQuestions[topicItem] || [];
+      if (arr.length > 0) {
+        wordGroups[topicItem] = arr;
+        sortedGroupKeys.push(topicItem);
       }
-    } else {
-      let assigned = false;
-      filteredWords.forEach(word => {
-        if (!wordGroups[word]) wordGroups[word] = [];
+    });
+  } else {
+    dedupedQuestions.forEach(q => {
+      const qLower = q.toLowerCase();
+      if (!topicVariants.some(v => qLower.includes(v))) return;
+      const words = qLower.split(/\W+/).filter(w => w && validGroupWords.includes(w));
+      const filteredWords = words.filter(w => !topicVariants.includes(w));
+      if (filteredWords.length === 0) {
         if (!seenQuestions.has(q)) {
-          wordGroups[word].push(q);
+          singleItems.push(q);
           seenQuestions.add(q);
-          assigned = true;
         }
-      });
-      if (!assigned && !seenQuestions.has(q)) {
-        singleItems.push(q);
-        seenQuestions.add(q);
+      } else {
+        let assigned = false;
+        filteredWords.forEach(word => {
+          if (!wordGroups[word]) wordGroups[word] = [];
+          if (!seenQuestions.has(q)) {
+            wordGroups[word].push(q);
+            seenQuestions.add(q);
+            assigned = true;
+          }
+        });
+        if (!assigned && !seenQuestions.has(q)) {
+          singleItems.push(q);
+          seenQuestions.add(q);
+        }
       }
-    }
-  });
-  Object.keys(wordGroups).forEach(word => {
-    if (wordGroups[word].length === 1) {
-      singleItems.push(wordGroups[word][0]);
-      delete wordGroups[word];
-    }
-  });
-  wordGroups['Main Silo'] = singleItems;
-  sortedGroupKeys = ['Main Silo', ...Object.keys(wordGroups).filter(k => k !== 'Main Silo').sort((a, b) => wordGroups[b].length - wordGroups[a].length)];
-}
+    });
+    Object.keys(wordGroups).forEach(word => {
+      if (wordGroups[word].length === 1) {
+        singleItems.push(wordGroups[word][0]);
+        delete wordGroups[word];
+      }
+    });
+    wordGroups['Main Silo'] = singleItems;
+    sortedGroupKeys = ['Main Silo', ...Object.keys(wordGroups).filter(k => k !== 'Main Silo').sort((a, b) => wordGroups[b].length - wordGroups[a].length)];
+  }
 
   // Fetch tabs for selected sheet using Google Sheets API
   const [tabs, setTabs] = useState([]);
@@ -388,21 +386,126 @@ if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
         const res = await fetch(url);
         if (!res.ok) throw new Error('Failed to fetch tabs');
         const data = await res.json();
-        const tabNames = (data.sheets || []).map(s => s.properties.title);
-        setTabs(tabNames);
-        // Set initial tab to first tab if not already set
-        if (tabNames.length > 0 && selectedTab !== tabNames[0]) setSelectedTab(tabNames[0]);
+  const tabNames = (data.sheets || []).map(s => s.properties.title);
+  setTabs(tabNames);
+  setTemplateExists(tabNames.includes('Template'));
       } catch (err) {
         setTabs([]);
+  setTemplateExists(false);
       }
     }
     fetchTabs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSheet, sheetApiKey]);
 
+  function sanitizeTabTitle(name) {
+    if (!name || typeof name !== 'string') return 'Silo';
+    // Remove forbidden characters: []:*?/\
+    let t = name.replace(/[\[\]:\*\?\/\\]/g, ' ').trim();
+    if (t.length > 90) t = t.slice(0, 90);
+    return t || 'Silo';
+  }
+
+  // Transform topic into tab title rules:
+  // - If starts with "best ", remove "est" to become "b " + rest (e.g., "best lip balm" -> "b lip balm")
+  function topicToTabTitle(raw) {
+    let t = String(raw || '').trim();
+    const lower = t.toLowerCase();
+    if (lower.startsWith('best ')) {
+      // remove 'est' from leading 'best '
+      t = 'b ' + t.slice(5);
+    }
+    return sanitizeTabTitle(t);
+  }
+
+  // Google Sheets palette approximations for background colors (0..1 floats)
+  // light magenta 3 and light magenta 2
+  const MAGENTA3 = { r: 244 / 255, g: 199 / 255, b: 244 / 255 }; // ~#F4C7F4
+  const MAGENTA2 = { r: 248 / 255, g: 223 / 255, b: 246 / 255 }; // ~#F8DFF6
+
+  // Helper: group an array of questions into mini-silos like the UI and return
+  // the ordered keys, groups map, flattened questions, and color bands metadata.
+  function buildGroupsAndBands(questions, baseTopic) {
+    const qs = (questions || []).map(q => String(q || '').trim()).filter(Boolean);
+    // Auto-detect grouping words from this question set
+    const wordCount = {};
+    const localStop = new Set(stopwords);
+    qs.forEach(q => {
+      q.toLowerCase().split(/\W+/).forEach(w => {
+        if (w && !localStop.has(w)) wordCount[w] = (wordCount[w] || 0) + 1;
+      });
+    });
+  const topicBase = String(baseTopic || (Array.isArray(topic) ? (topic[0] || '') : (topic || ''))).toLowerCase();
+  const topicWords = Array.from(new Set(topicBase.split(/\W+/).filter(Boolean)));
+    const topicVariantsLocal = [
+      ...topicWords,
+      ...topicWords.map(w => (w.endsWith('s') ? w.slice(0, -1) : w + 's'))
+    ];
+    const autoWords = Object.keys(wordCount).filter(w => wordCount[w] > 1 && !localStop.has(w));
+    const validWords = autoWords.filter(w => !topicVariantsLocal.includes(w));
+
+    const groups = {};
+    const singles = [];
+    const seen = new Set();
+    qs.forEach(q => {
+      const qLower = q.toLowerCase();
+      // Skip if contains main topic variants
+      if (topicVariantsLocal.some(v => v && qLower.includes(v))) {
+        // keep; but we still allow grouping by other words
+      }
+      const words = qLower.split(/\W+/).filter(w => w && validWords.includes(w));
+      const filteredWords = words.filter(w => !topicVariantsLocal.includes(w));
+      if (filteredWords.length === 0) {
+        if (!seen.has(q)) {
+          singles.push(q);
+          seen.add(q);
+        }
+      } else {
+        let assigned = false;
+        filteredWords.forEach(word => {
+          if (!groups[word]) groups[word] = [];
+          if (!seen.has(q)) {
+            groups[word].push(q);
+            seen.add(q);
+            assigned = true;
+          }
+        });
+        if (!assigned && !seen.has(q)) {
+          singles.push(q);
+          seen.add(q);
+        }
+      }
+    });
+    Object.keys(groups).forEach(w => {
+      if (groups[w].length === 1) {
+        singles.push(groups[w][0]);
+        delete groups[w];
+      }
+    });
+    groups['Main Silo'] = singles;
+    const keys = ['Main Silo', ...Object.keys(groups).filter(k => k !== 'Main Silo').sort((a, b) => groups[b].length - groups[a].length)];
+    const flattened = keys.flatMap(k => groups[k]);
+    const bands = keys.map((k, idx) => ({ size: (groups[k] || []).length, color: idx % 2 === 0 ? MAGENTA3 : MAGENTA2 }));
+    return { keys, groups, flattened, bands };
+  }
+
+  function toTitleCase(s) {
+    return String(s || '')
+      .toLowerCase()
+      .split(/\s+/)
+      .map(w => w ? (w[0].toUpperCase() + w.slice(1)) : '')
+      .join(' ')
+      .trim();
+  }
+
   async function exportToGoogleSheets() {
     setExporting(true);
     setExportError('');
+    if (!templateExists) {
+      setExporting(false);
+      setExportError('Template tab not found in the selected Google Sheet. Please add a tab named "Template".');
+      return;
+    }
     const jwt = localStorage.getItem('googleJwt') || '';
     if (!jwt) {
       setExportError('Not authenticated with Google. Please sign in.');
@@ -410,50 +513,74 @@ if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
       return;
     }
     try {
-      // Prepare data: each group as a section, each question as a row
-      const rows = [];
-      sortedGroupKeys.forEach(group => {
-        rows.push([group]);
-        wordGroups[group].forEach(q => rows.push(['', q]));
-        rows.push(['']);
-      });
-      // Send to backend for OAuth2-authenticated write
-      const url = 'https://blog-setup-server.onrender.com/api/sheets/write';
-      const body = {
-        sheetId: selectedSheet,
-        tab: selectedTab,
-        values: rows
+      const endpoint = 'https://blog-setup-server.onrender.com/api/sheets/duplicate-and-write';
+      const commonHeaders = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${jwt}`,
       };
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${jwt}`,
-        },
-        body: JSON.stringify(body)
-      });
-      const result = await res.json();
-      if (!res.ok || !result.success) throw new Error(result.error || 'Google Sheets write error');
+
+    const writeOne = async (tabTitle, questions) => {
+      const { flattened, bands } = buildGroupsAndBands(questions, tabTitle);
+          const count = flattened.length;
+          const titleCase = toTitleCase(tabTitle);
+          const headerTitle = `${titleCase} - ${count}`;
+        const values = (flattened || []).map(q => [String(q || '').replace(/^\*\s*/, '')]);
+        const body = {
+          sheetId: selectedSheet,
+          sourceTab: 'Template',
+      newTabTitle: topicToTabTitle(tabTitle),
+          startCell: 'B11',
+            values,
+          bands,
+            titleCell: 'B10',
+            titleValue: headerTitle,
+        };
+        const res = await fetch(endpoint, { method: 'POST', headers: commonHeaders, body: JSON.stringify(body) });
+        const result = await res.json();
+        if (!res.ok || !result.success) throw new Error(result.error || 'Google Sheets write error');
+        return result;
+      };
+
+      let success = 0;
+      let createdTabs = [];
+      if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
+        for (const topicItem of multiTopics) {
+          const questions = (paaQuestions[topicItem] || []).filter(Boolean);
+          if (questions.length === 0) continue;
+          const result = await writeOne(topicItem, questions);
+          success += 1;
+          if (result.tabTitle) createdTabs.push(result.tabTitle);
+        }
+      } else {
+        const questions = dedupedQuestions;
+        if (questions.length === 0) throw new Error('No questions to export');
+        const title = Array.isArray(topic) ? (topic[0] || 'Silo') : (topic || 'Silo');
+        const result = await writeOne(title, questions);
+        success = 1;
+        if (result.tabTitle) createdTabs.push(result.tabTitle);
+      }
       setExporting(false);
-      alert('Exported to Google Sheets!');
+      if (success > 1) {
+        alert(`Exported ${success} silos into new tabs: ${createdTabs.join(', ')}`);
+      } else {
+        alert(`Exported to Google Sheets into tab "${createdTabs[0] || 'New Tab'}"`);
+      }
     } catch (err) {
       setExporting(false);
       setExportError('Export failed: ' + (err.message || 'Unknown error'));
     }
   }
 
-  // Download CSV
+  // Download CSV of current grouped questions
   function downloadCSV() {
-    // Prepare CSV content
     let csv = '';
     sortedGroupKeys.forEach(group => {
       csv += `"${group}"\n`;
-      wordGroups[group].forEach(q => {
+      (wordGroups[group] || []).forEach(q => {
         csv += `,"${q.replace(/"/g, '""')}"\n`;
       });
       csv += '\n';
     });
-    // Create blob and download
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -464,7 +591,6 @@ if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
-
 
   return (
     <div style={{ marginTop: '2rem' }}>
@@ -507,7 +633,7 @@ if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
           onChange={handleInputChange}
         />
       </div>
-      <div style={{ margin: '1rem 0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+      <div style={{ margin: '1rem 0', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
         <button onClick={downloadCSV}>
           Download CSV
         </button>
@@ -519,15 +645,12 @@ if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
             ))}
           </select>
         </label>
-        <label>
-          Tab:
-          <select value={selectedTab} onChange={e => setSelectedTab(e.target.value)} style={{ marginLeft: '0.5rem' }}>
-            {tabs.map(tab => (
-              <option key={tab} value={tab}>{tab}</option>
-            ))}
-          </select>
-        </label>
-        <button onClick={exportToGoogleSheets} disabled={exporting || !sheetApiKey || !selectedSheet || !selectedTab}>
+        {!templateExists && (
+          <span style={{ color: 'salmon', fontWeight: 600 }}>
+            Template tab not found in this sheet
+          </span>
+        )}
+  <button onClick={exportToGoogleSheets} disabled={exporting || !sheetApiKey || !selectedSheet || !templateExists}>
           {exporting ? 'Exporting...' : 'Export to Google Sheets'}
         </button>
         {exportError && <div style={{ color: 'red', marginTop: '0.5rem' }}>{exportError}</div>}
@@ -768,4 +891,5 @@ if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
     </div>
   );
 }
+
 export default PAAFetcher;
