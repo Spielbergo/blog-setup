@@ -61,6 +61,9 @@ const PAAFetcher = ({ topic }) => {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [prefilteredPAAs, setPrefilteredPAAs] = useState([]);
+  // Export confirmation modal
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportDetails, setExportDetails] = useState(null);
 
   // Call Express API for PAA questions
   const fetchPAAQuestions = async () => {
@@ -699,7 +702,7 @@ const PAAFetcher = ({ topic }) => {
       window.dispatchEvent(new Event('googleJwtChanged'));
       throw new Error('Your Google session expired. Please sign in again.');
     }
-    if (!res.ok) {
+  if (!res.ok) {
       let msg = 'Export failed';
       try {
         const data = await res.json();
@@ -707,7 +710,8 @@ const PAAFetcher = ({ topic }) => {
       } catch {}
       throw new Error(msg);
     }
-    return res.json();
+  const json = await res.json();
+  return { tabTitle: json?.tabTitle || topicToTabTitle(tabTitle), count };
   }
 
   // Export grouped questions to Google Sheets (duplicate Template -> write at B11)
@@ -723,12 +727,14 @@ const PAAFetcher = ({ topic }) => {
     }
     try {
       setExporting(true);
+      const entries = [];
       if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
         // Export each topic as its own tab
         for (const topicItem of multiTopics) {
           const arr = paaQuestions[topicItem] || [];
           if (!arr || arr.length === 0) continue;
-          await writeOne(topicItem, arr);
+          const result = await writeOne(topicItem, arr);
+          entries.push({ tabTitle: result.tabTitle, count: result.count });
         }
       } else {
         // Single-topic or pasted list
@@ -737,8 +743,16 @@ const PAAFetcher = ({ topic }) => {
         if (list.length === 0) {
           setExportError('Nothing to export. Fetch or paste some questions first.');
         } else {
-          await writeOne(baseTopic, list);
+          const result = await writeOne(baseTopic, list);
+          entries.push({ tabTitle: result.tabTitle, count: result.count });
         }
+      }
+      if (entries.length > 0) {
+        const sheetInfo = sheets.find(s => s.id === selectedSheet);
+        const sheetTitle = sheetInfo?.title || selectedSheet;
+        const totalCount = entries.reduce((sum, e) => sum + (e.count || 0), 0);
+        setExportDetails({ sheetTitle, entries, totalCount });
+        setExportModalOpen(true);
       }
     } catch (err) {
       setExportError(err?.message || 'Export failed.');
@@ -1004,6 +1018,29 @@ const PAAFetcher = ({ topic }) => {
             ))}
           </tbody>
         </table>
+      </Modal>
+      {/* Export confirmation modal */}
+      <Modal open={exportModalOpen} onClose={() => setExportModalOpen(false)} title="Export complete">
+        {exportDetails && (
+          <div>
+            <p style={{ marginTop: 0 }}>
+              Exported {exportDetails.totalCount} item{exportDetails.totalCount === 1 ? '' : 's'} to Google Sheet "{exportDetails.sheetTitle}".
+            </p>
+            <div style={{ color: '#aaa', marginBottom: '0.5rem' }}>
+              Includes the "All About …" intro at the top of each tab, title at B10, values from B11, alternating magenta bands, and Arial 12 for questions.
+            </div>
+            <ul style={{ paddingLeft: '1.25rem' }}>
+              {exportDetails.entries.map((e, i) => (
+                <li key={i}>
+                  {toTitleCase(e.tabTitle)}: {e.count} row{e.count === 1 ? '' : 's'}
+                </li>
+              ))}
+            </ul>
+            <div style={{ marginTop: '0.75rem' }}>
+              <button className="btn" onClick={() => setExportModalOpen(false)}>Close</button>
+            </div>
+          </div>
+        )}
       </Modal>
       {error && <div style={{ color: 'red' }}>{error}</div>}
     </div>
