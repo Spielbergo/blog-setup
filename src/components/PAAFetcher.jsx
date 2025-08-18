@@ -115,7 +115,7 @@ const PAAFetcher = ({ topic }) => {
             return false;
           });
         });
-        // Gemini semantic filter
+        // Gemini semantic filter (dedupe against existing blog titles)
         if (geminiApiKey && filteredPAAs.length > 0 && blogTitles.length > 0) {
           try {
             const genAI = new GoogleGenerativeAI(geminiApiKey);
@@ -126,6 +126,23 @@ const PAAFetcher = ({ topic }) => {
             const geminiFiltered = text.split(/\n|\r/).map(q => q.trim()).filter(Boolean);
             if (geminiFiltered.length > 0 && geminiFiltered.every(q => q.endsWith('?'))) {
               filteredPAAs = geminiFiltered;
+            }
+          } catch (err) {
+            // Ignore Gemini errors
+          }
+        }
+
+        // Gemini brand/celebrity filter per-topic
+        if (geminiApiKey && filteredPAAs.length > 0) {
+          try {
+            const genAI = new GoogleGenerativeAI(geminiApiKey);
+            const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+            const prompt = `Here is a list of questions about ${topicItem}. Return only the questions that do NOT mention any brand names or celebrities.\nQuestions:\n${filteredPAAs.join('\n')}`;
+            const result = await model.generateContent(prompt);
+            const text = result.response.text();
+            const noBrand = text.split(/\n|\r/).map(q => q.trim()).filter(Boolean);
+            if (noBrand.length > 0 && noBrand.every(q => q.endsWith('?'))) {
+              filteredPAAs = noBrand;
             }
           } catch (err) {
             // Ignore Gemini errors
@@ -415,13 +432,13 @@ const PAAFetcher = ({ topic }) => {
       // remove 'est' from leading 'best '
       t = 'b ' + t.slice(5);
     }
-    return sanitizeTabTitle(t);
+  return toTitleCase(sanitizeTabTitle(t));
   }
 
   // Google Sheets palette approximations for background colors (0..1 floats)
   // light magenta 3 and light magenta 2
-  const MAGENTA3 = { r: 244 / 255, g: 199 / 255, b: 244 / 255 }; // ~#F4C7F4
-  const MAGENTA2 = { r: 248 / 255, g: 223 / 255, b: 246 / 255 }; // ~#F8DFF6
+  const MAGENTA3 = { r: 244 / 255, g: 199 / 255, b: 244 / 255 }; // ~#ead1dc
+  const MAGENTA2 = { r: 248 / 255, g: 223 / 255, b: 246 / 255 }; // ~#d5a6bd
 
   // Helper: group an array of questions into mini-silos like the UI and return
   // the ordered keys, groups map, flattened questions, and color bands metadata.
