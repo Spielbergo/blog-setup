@@ -22,8 +22,16 @@ const Navbar = () => {
         });
         if (res.ok) {
           const data = await res.json();
-          setIsGoogleAuthed(true);
-          setUserName(data.name || '');
+          if (data.authed) {
+            setIsGoogleAuthed(true);
+            setUserName(data.name || '');
+          } else {
+            // Token invalid/expired
+            localStorage.removeItem('googleJwt');
+            setJwt('');
+            setIsGoogleAuthed(false);
+            setUserName('');
+          }
         } else {
           setIsGoogleAuthed(false);
           setUserName('');
@@ -35,6 +43,13 @@ const Navbar = () => {
     }
     checkAuth();
   }, [jwt]);
+
+  // Listen for custom event to refresh JWT state when other components clear it
+  useEffect(() => {
+    const handler = () => setJwt(localStorage.getItem('googleJwt') || '');
+    window.addEventListener('googleJwtChanged', handler);
+    return () => window.removeEventListener('googleJwtChanged', handler);
+  }, []);
 
   // Check server status
   // Removed server status feature
@@ -70,32 +85,9 @@ const Navbar = () => {
       </div>
       {isGoogleAuthed && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
-          <div
-            style={{ color: '#4caf50', fontSize: '0.95rem', marginTop: '0.25rem', fontWeight: 'bold', cursor: 'pointer', position: 'relative', marginRight: 20 }}
-            className="sheets-status-hover"
-          >
-            Connected to Google Sheets
-            <button
-              className="navbar-btn-signout"
-              onClick={handleGoogleSignOut}
-              style={{
-                position: 'absolute',
-                right: '-110px',
-                top: '0',
-                opacity: 0,
-                pointerEvents: 'none',
-                transition: 'opacity 0.2s',
-                background: '#333',
-                color: '#fff',
-                fontSize: '0.85rem',
-                padding: '4px 12px',
-                borderRadius: '4px',
-                border: 'none',
-                fontWeight: 'normal',
-                zIndex: 2,
-              }}
-              id="signout-btn"
-            >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
+            <span style={{ color: '#4caf50', fontSize: '0.95rem', fontWeight: 'bold' }}>Connected to Google Sheets</span>
+            <button className="navbar-btn" onClick={handleGoogleSignOut} title="Sign out from Google">
               Sign out
             </button>
           </div>

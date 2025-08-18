@@ -536,8 +536,13 @@ const PAAFetcher = ({ topic }) => {
             titleValue: headerTitle,
         };
         const res = await fetch(endpoint, { method: 'POST', headers: commonHeaders, body: JSON.stringify(body) });
-        const result = await res.json();
-        if (!res.ok || !result.success) throw new Error(result.error || 'Google Sheets write error');
+        // Handle auth errors: clear token so Navbar updates and user can sign in again
+        if (res.status === 401) {
+          localStorage.removeItem('googleJwt');
+          window.dispatchEvent(new Event('googleJwtChanged'));
+        }
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok || !result.success) throw new Error(result.error || (res.status === 401 ? 'Invalid or expired token' : 'Google Sheets write error'));
         return result;
       };
 
@@ -567,7 +572,11 @@ const PAAFetcher = ({ topic }) => {
       }
     } catch (err) {
       setExporting(false);
-      setExportError('Export failed: ' + (err.message || 'Unknown error'));
+      if ((err.message || '').toLowerCase().includes('invalid or expired')) {
+        setExportError('Export failed: Invalid or expired token. Please sign in again.');
+      } else {
+        setExportError('Export failed: ' + (err.message || 'Unknown error'));
+      }
     }
   }
 
