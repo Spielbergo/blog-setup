@@ -882,7 +882,7 @@ const PAAFetcher = ({ topic }) => {
                   </button>
                 </h3>
                 <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
-                  PAA count: {topicQuestions.length}
+                  PAA count: {topicFlattened.length}
                 </div>
                 <table style={{ width: '100%', borderCollapse: 'collapse', background: '#222', color: '#fff', marginBottom: '1rem' }}>
                   <thead>
@@ -915,7 +915,12 @@ const PAAFetcher = ({ topic }) => {
         <div>
           <h3>PAA Questions (Mini Silos by Shared Words)</h3>
           <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
-            Filtered PAA count: {dedupedQuestions.length}
+            {/* Include injected "All About …" intro in the count */}
+            {(() => {
+              const baseTopic = Array.isArray(topic) ? (topic[0] || '') : (topic || '');
+              const { flattened } = buildGroupsAndBands(dedupedQuestions, baseTopic);
+              return <>Filtered PAA count: {flattened.length}</>;
+            })()}
           </div>
           {/* Use unified grouping for single-topic view */}
           {(() => {
@@ -951,7 +956,12 @@ const PAAFetcher = ({ topic }) => {
         <div>
           <h3>PAA Questions (Deduped)</h3>
           <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
-            Filtered PAA count: {dedupedQuestions.length}
+            {/* Include injected "All About …" intro in the count */}
+            {(() => {
+              const baseTopic = Array.isArray(topic) ? (topic[0] || '') : (topic || '');
+              const { flattened } = buildGroupsAndBands(dedupedQuestions, baseTopic);
+              return <>Filtered PAA count: {flattened.length}</>;
+            })()}
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', background: '#222', color: '#fff', marginBottom: '2rem' }}>
             <thead>
