@@ -132,25 +132,17 @@ const PAAFetcher = ({ topic }) => {
           }
         }
 
-        // Apply custom filters per topic
+        // Apply custom hard filters per topic (after semantic blog-title filter)
         filteredPAAs = applyCustomFiltersForTopic(topicItem, filteredPAAs);
 
-        // Gemini brand/celebrity filter per-topic
-        if (geminiApiKey && filteredPAAs.length > 0) {
-          try {
-            const genAI = new GoogleGenerativeAI(geminiApiKey);
-            const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-            const prompt = `Here is a list of questions about ${topicItem}. Return only the questions that do NOT mention any brand names or celebrities.\nQuestions:\n${filteredPAAs.join('\n')}`;
-            const result = await model.generateContent(prompt);
-            const text = result.response.text();
-            const noBrand = text.split(/\n|\r/).map(q => q.trim()).filter(Boolean);
-            if (noBrand.length > 0 && noBrand.every(q => q.endsWith('?'))) {
-              filteredPAAs = noBrand;
-            }
-          } catch (err) {
-            // Ignore Gemini errors
-          }
+        // Intra-list dedupe via Gemini within this topic
+        if (geminiApiKey && filteredPAAs.length > 1) {
+          filteredPAAs = await geminiDedupeSimilar(filteredPAAs, topicItem, geminiApiKey);
         }
+
+        // Title case for display/export consistency
+        filteredPAAs = filteredPAAs.map(q => toTitleCase(q.replace(/^\*\s*/, '')));
+
         allResults[topicItem] = filteredPAAs;
       }
       setPaaQuestions(allResults);
@@ -224,7 +216,7 @@ const PAAFetcher = ({ topic }) => {
   }, [dedupedQuestionsRaw, geminiApiKey, topic, filteredQuestions]);
 
   // Use filteredQuestions for grouping
-  const dedupedQuestions = filteredQuestions;
+  const dedupedQuestions = filteredQuestions.map(q => toTitleCase(String(q || '').replace(/^\*\s*/, '')));
 
   // Expanded stopwords
   const stopwords = [
@@ -610,85 +602,36 @@ const PAAFetcher = ({ topic }) => {
     return `All About ${coreTitle}`;
   }
 
-  async function exportToGoogleSheets() {
-    setExporting(true);
-    setExportError('');
-    if (!templateExists) {
-      setExporting(false);
-      setExportError('Template tab not found in the selected Google Sheet. Please add a tab named "Template".');
-      return;
-    }
-    const jwt = localStorage.getItem('googleJwt') || '';
-    if (!jwt) {
-      setExportError('Not authenticated with Google. Please sign in.');
-      setExporting(false);
-      return;
-    }
+  async function geminiDedupeSimilar(list, aboutTopic, geminiApiKey) {
     try {
-      const endpoint = 'https://blog-setup-server.onrender.com/api/sheets/duplicate-and-write';
-      const commonHeaders = {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${jwt}`,
-      };
-
-    const writeOne = async (tabTitle, questions) => {
-      const { flattened, bands } = buildGroupsAndBands(questions, tabTitle);
-          const count = flattened.length;
-          const titleCase = toTitleCase(tabTitle);
-          const headerTitle = `${titleCase} - ${count}`;
-        const values = (flattened || []).map(q => [String(q || '').replace(/^\*\s*/, '')]);
-        const body = {
-          sheetId: selectedSheet,
-          sourceTab: 'Template',
-      newTabTitle: topicToTabTitle(tabTitle),
-          startCell: 'B11',
-            values,
-          bands,
-            titleCell: 'B10',
-            titleValue: headerTitle,
-        };
-        const res = await fetch(endpoint, { method: 'POST', headers: commonHeaders, body: JSON.stringify(body) });
-          // Handle auth errors: clear token so Navbar updates and user can sign in again
-          if (res.status === 401) {
-            localStorage.removeItem('googleJwt');
-            window.dispatchEvent(new Event('googleJwtChanged'));
-          }
-        const result = await res.json().catch(() => ({}));
-          if (!res.ok || !result.success) throw new Error(result.error || (res.status === 401 ? 'Invalid or expired token' : 'Google Sheets write error'));
-        return result;
-      };
-
-      let success = 0;
-      let createdTabs = [];
-      if (multiTopics.length > 1 && typeof paaQuestions === 'object') {
-        for (const topicItem of multiTopics) {
-          const questions = (paaQuestions[topicItem] || []).filter(Boolean);
-          if (questions.length === 0) continue;
-          const result = await writeOne(topicItem, questions);
-          success += 1;
-          if (result.tabTitle) createdTabs.push(result.tabTitle);
-        }
-      } else {
-        const questions = dedupedQuestions;
-        if (questions.length === 0) throw new Error('No questions to export');
-        const title = Array.isArray(topic) ? (topic[0] || 'Silo') : (topic || 'Silo');
-        const result = await writeOne(title, questions);
-        success = 1;
-        if (result.tabTitle) createdTabs.push(result.tabTitle);
+      if (!geminiApiKey || !Array.isArray(list) || list.length < 2) return list;
+      const genAI = new GoogleGenerativeAI(geminiApiKey);
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      const prompt = `You are cleaning a list of proposed blog post titles for the topic "${aboutTopic}".\n` +
+        `Remove near-duplicates and keep only one best-phrased version per intent. Preserve specificity to ${aboutTopic}.\n` +
+        `Return only the final titles, one per line, with no bullets or numbering.` +
+        `\n\nTitles:\n${list.join('\n')}`;
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
+      const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      // Fallback: only accept if it returned at least 50% of originals to avoid over-pruning mistakes
+      if (lines.length > 0 && lines.length <= list.length && lines.length >= Math.ceil(list.length * 0.5)) {
+        return Array.from(new Set(lines));
       }
-      setExporting(false);
-      if (success > 1) {
-        alert(`Exported ${success} silos into new tabs: ${createdTabs.join(', ')}`);
-      } else {
-        alert(`Exported to Google Sheets into tab "${createdTabs[0] || 'New Tab'}"`);
-      }
+      return list;
+    } catch (_) {
+      return list;
+    }
+  }
+
+  // Export to Gemini for deduping and grouping, then update local state
+  async function exportAndGroupToGemini(questions, topic) {
+    if (!geminiApiKey || questions.length < 2) return questions;
+    try {
+      const deduped = await geminiDedupeSimilar(questions, topic, geminiApiKey);
+      return deduped;
     } catch (err) {
-      setExporting(false);
-      if ((err.message || '').toLowerCase().includes('invalid or expired')) {
-        setExportError('Export failed: Invalid or expired token. Please sign in again.');
-      } else {
-        setExportError('Export failed: ' + (err.message || 'Unknown error'));
-      }
+      return questions;
     }
   }
 
@@ -707,7 +650,7 @@ const PAAFetcher = ({ topic }) => {
     csvKeys.forEach(group => {
       csv += `"${group}"\n`;
       (csvGroups[group] || []).forEach(q => {
-        csv += `,"${q.replace(/"/g, '""')}"\n`;
+        csv += `,"${toTitleCase(q).replace(/\"/g, '""')}"\n`;
       });
       csv += '\n';
     });
@@ -720,6 +663,25 @@ const PAAFetcher = ({ topic }) => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  const writeOne = async (tabTitle, questions) => {
+    const { flattened, bands } = buildGroupsAndBands(questions, tabTitle);
+    const count = flattened.length;
+    const titleCase = toTitleCase(tabTitle);
+    const headerTitle = `${titleCase} - ${count}`;
+    const values = (flattened || []).map(q => [toTitleCase(String(q || '').replace(/^\*\s*/, ''))]);
+    const body = {
+      sheetId: selectedSheet,
+      sourceTab: 'Template',
+      newTabTitle: topicToTabTitle(tabTitle),
+      startCell: 'B11',
+      values,
+      bands,
+      titleCell: 'B10',
+      titleValue: headerTitle,
+    };
+    // ...existing code...
   }
 
   return (
