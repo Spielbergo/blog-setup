@@ -220,7 +220,7 @@ const PAAFetcher = ({ topic }) => {
 
   // Expanded stopwords
   const stopwords = [
-    'what','how','why','when','where','who','is','are','do','does','can','should','could','will','would','did','was','were','the','a','an','to','in','on','for','of','this','that','these','those','it','its','and','but','or','if','with','as','by','at','from','about','after','before','so','then','than','all','any','be','not','my','your','their','our','his','her','has','have','had','you','me','i'
+    'what','how','why','when','which','where','who','is','are','do','does','can','should','could','will','would','did','was','were','the','a','an','to','in','on','for','of','this','that','these','those','it','its','and','but','or','if','with','as','by','at','from','about','after','before','so','then','than','all','any','be','not','my','your','their','our','his','her','has','have','had','you','me','i'
   ];
 
   // Auto-detect shared words
