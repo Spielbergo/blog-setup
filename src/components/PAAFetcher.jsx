@@ -447,16 +447,20 @@ const PAAFetcher = ({ topic }) => {
   // the ordered keys, groups map, flattened questions, and color bands metadata.
   function buildGroupsAndBands(questions, baseTopic) {
     const qs = (questions || []).map(q => String(q || '').trim()).filter(Boolean);
+    // Inject leading All About article
+    const allAbout = getAllAboutTitle(baseTopic || (Array.isArray(topic) ? topic[0] : topic));
+    const qsWithIntro = [allAbout, ...qs];
+
     // Auto-detect grouping words from this question set
     const wordCount = {};
     const localStop = new Set(stopwords);
-    qs.forEach(q => {
+    qsWithIntro.forEach(q => {
       q.toLowerCase().split(/\W+/).forEach(w => {
         if (w && !localStop.has(w)) wordCount[w] = (wordCount[w] || 0) + 1;
       });
     });
-  const topicBase = String(baseTopic || (Array.isArray(topic) ? (topic[0] || '') : (topic || ''))).toLowerCase();
-  const topicWords = Array.from(new Set(topicBase.split(/\W+/).filter(Boolean)));
+    const topicBase = String(baseTopic || (Array.isArray(topic) ? (topic[0] || '') : (topic || ''))).toLowerCase();
+    const topicWords = Array.from(new Set(topicBase.split(/\W+/).filter(Boolean)));
     const topicVariantsLocal = [
       ...topicWords,
       ...topicWords.map(w => (w.endsWith('s') ? w.slice(0, -1) : w + 's'))
@@ -467,12 +471,8 @@ const PAAFetcher = ({ topic }) => {
     const groups = {};
     const singles = [];
     const seen = new Set();
-    qs.forEach(q => {
+    qsWithIntro.forEach(q => {
       const qLower = q.toLowerCase();
-      // Skip if contains main topic variants
-      if (topicVariantsLocal.some(v => v && qLower.includes(v))) {
-        // keep; but we still allow grouping by other words
-      }
       const words = qLower.split(/\W+/).filter(w => w && validWords.includes(w));
       const filteredWords = words.filter(w => !topicVariantsLocal.includes(w));
       if (filteredWords.length === 0) {
@@ -603,6 +603,13 @@ const PAAFetcher = ({ topic }) => {
     return unique;
   }
 
+  function getAllAboutTitle(topicStr) {
+    const coreTokens = topicCoreTokens(topicStr);
+    const core = coreTokens.length > 0 ? coreTokens.join(' ') : String(topicStr || '').trim();
+    const coreTitle = toTitleCase(core);
+    return `All About ${coreTitle}`;
+  }
+
   async function exportToGoogleSheets() {
     setExporting(true);
     setExportError('');
@@ -687,10 +694,19 @@ const PAAFetcher = ({ topic }) => {
 
   // Download CSV of current grouped questions
   function downloadCSV() {
+    // Use unified grouping for the current view to ensure consistent ordering
+    const baseTopic = Array.isArray(topic) ? (topic[0] || '') : (topic || '');
+    const { keys: csvKeys, groups: csvGroups } = buildGroupsAndBands(
+      multiTopics.length > 1 && typeof paaQuestions === 'object'
+        ? Object.values(paaQuestions).flat()
+        : dedupedQuestions,
+      baseTopic
+    );
+
     let csv = '';
-    sortedGroupKeys.forEach(group => {
+    csvKeys.forEach(group => {
       csv += `"${group}"\n`;
-      (wordGroups[group] || []).forEach(q => {
+      (csvGroups[group] || []).forEach(q => {
         csv += `,"${q.replace(/"/g, '""')}"\n`;
       });
       csv += '\n';
@@ -777,67 +793,15 @@ const PAAFetcher = ({ topic }) => {
       {multiTopics.length > 1 && typeof paaQuestions === 'object' ? (
         <div>
           {multiTopics.map(topicItem => {
-            // For each topic, run Gemini grouping and render its own table
             const topicQuestions = paaQuestions[topicItem] || [];
-            // Grouping logic for this topic
-            let topicGroupWords = [];
-            if (topicQuestions.length > 0) {
-              // Auto-detect shared words for this topic
-              const wordCount = {};
-              topicQuestions.forEach(q => {
-                q.toLowerCase().split(/\W+/).forEach(w => {
-                  if (w && !stopwords.includes(w)) {
-                    wordCount[w] = (wordCount[w] || 0) + 1;
-                  }
-                });
-              });
-              topicGroupWords = Object.keys(wordCount).filter(w => wordCount[w] > 1);
-            }
-            // Filter out stopwords
-            const validTopicGroupWords = topicGroupWords.filter(w => !stopwords.includes(w));
-            // Group questions by validTopicGroupWords
-            let topicWordGroups = {};
-            let topicSingleItems = [];
-            const topicSeenQuestions = new Set();
-            topicQuestions.forEach(q => {
-              const qLower = q.toLowerCase();
-              const words = qLower.split(/\W+/).filter(w => w && validTopicGroupWords.includes(w));
-              if (words.length === 0) {
-                if (!topicSeenQuestions.has(q)) {
-                  topicSingleItems.push(q);
-                  topicSeenQuestions.add(q);
-                }
-              } else {
-                let assigned = false;
-                words.forEach(word => {
-                  if (!topicWordGroups[word]) topicWordGroups[word] = [];
-                  if (!topicSeenQuestions.has(q)) {
-                    topicWordGroups[word].push(q);
-                    topicSeenQuestions.add(q);
-                    assigned = true;
-                  }
-                });
-                if (!assigned && !topicSeenQuestions.has(q)) {
-                  topicSingleItems.push(q);
-                  topicSeenQuestions.add(q);
-                }
-              }
-            });
-            Object.keys(topicWordGroups).forEach(word => {
-              if (topicWordGroups[word].length === 1) {
-                topicSingleItems.push(topicWordGroups[word][0]);
-                delete topicWordGroups[word];
-              }
-            });
-            topicWordGroups['Main Silo'] = topicSingleItems;
-            const topicSortedGroupKeys = ['Main Silo', ...Object.keys(topicWordGroups).filter(k => k !== 'Main Silo').sort((a, b) => topicWordGroups[b].length - topicWordGroups[a].length)];
+            // Use unified grouping/ordering for consistency across UI/CSV/Sheets
+            const { keys: topicKeys, groups: topicGroups, flattened: topicFlattened } = buildGroupsAndBands(topicQuestions, topicItem);
 
             // Helper for copy logic per topic (use top-level state)
             const copied = !!copiedTopics[topicItem];
             const showPopup = !!popupTopics[topicItem];
             const handleCopySilo = () => {
-              const allQs = topicSortedGroupKeys.flatMap(word => topicWordGroups[word]);
-              const text = allQs.join('\n');
+              const text = topicFlattened.join('\n');
               navigator.clipboard.writeText(text).then(() => {
                 setCopiedTopics(prev => ({ ...prev, [topicItem]: true }));
                 setPopupTopics(prev => ({ ...prev, [topicItem]: true }));
@@ -903,8 +867,8 @@ const PAAFetcher = ({ topic }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {topicSortedGroupKeys.map(word => (
-                      topicWordGroups[word].map((q, idx) => {
+                    {topicKeys.map(word => (
+                      (topicGroups[word] || []).map((q, idx) => {
                         const isMain = word === 'Main Silo';
                         const rowBg = isMain ? '#222' : '#333';
                         const cellBg = isMain ? '#222' : '#2a2a2a';
@@ -928,30 +892,35 @@ const PAAFetcher = ({ topic }) => {
           <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
             Filtered PAA count: {dedupedQuestions.length}
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', background: '#222', color: '#fff', marginBottom: '2rem' }}>
-            <thead>
-              <tr>
-                <th style={{ borderBottom: '1px solid #444', padding: '0.5rem', textAlign: 'left' }}>PAA Question</th>
-                <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>Silo Keyword</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedGroupKeys.map(word => (
-                wordGroups[word].map((q, idx) => {
-                  // Color code: Main Silo = default, others = lighter
-                  const isMain = word === 'Main Silo';
-                  const rowBg = isMain ? '#222' : '#333';
-                  const cellBg = isMain ? '#222' : '#2a2a2a';
-                  return (
-                    <tr key={word + '-' + idx} style={{ background: rowBg }}>
-                      <td style={{ borderBottom: '1px solid #333', padding: '0.5rem', background: cellBg }}>{q.replace(/^\*\s*/, '')}</td>
-                      <td style={{ borderBottom: '1px solid #333', padding: '0.5rem', background: cellBg }}>{word}</td>
-                    </tr>
-                  );
-                })
-              ))}
-            </tbody>
-          </table>
+          {/* Use unified grouping for single-topic view */}
+          {(() => {
+            const { keys: displaySortedGroupKeys, groups: displayWordGroups } = buildGroupsAndBands(dedupedQuestions, Array.isArray(topic) ? (topic[0] || '') : (topic || ''));
+            return (
+              <table style={{ width: '100%', borderCollapse: 'collapse', background: '#222', color: '#fff', marginBottom: '2rem' }}>
+                <thead>
+                  <tr>
+                    <th style={{ borderBottom: '1px solid #444', padding: '0.5rem', textAlign: 'left' }}>PAA Question</th>
+                    <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>Silo Keyword</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displaySortedGroupKeys.map(word => (
+                    (displayWordGroups[word] || []).map((q, idx) => {
+                      const isMain = word === 'Main Silo';
+                      const rowBg = isMain ? '#222' : '#333';
+                      const cellBg = isMain ? '#222' : '#2a2a2a';
+                      return (
+                        <tr key={word + '-' + idx} style={{ background: rowBg }}>
+                          <td style={{ borderBottom: '1px solid #333', padding: '0.5rem', background: cellBg }}>{q.replace(/^\*\s*/, '')}</td>
+                          <td style={{ borderBottom: '1px solid #333', padding: '0.5rem', background: cellBg }}>{word}</td>
+                        </tr>
+                      );
+                    })
+                  ))}
+                </tbody>
+              </table>
+            );
+          })()}
         </div>
       ) : dedupedQuestions.length > 0 ? (
         <div>
