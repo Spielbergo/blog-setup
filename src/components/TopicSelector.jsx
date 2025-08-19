@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 // Vite exposes env variables prefixed with VITE_ via import.meta.env
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import './TopicSelector.css';
 
 
 const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
@@ -95,39 +96,31 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
   };
 
   return (
-    <div style={{ marginTop: '2rem' }}>
+    <div className="ts-container">
       <h2>Select Main Topic</h2>
       <input
         type="text"
         value={mainTopic}
         onChange={handleTopicChange}
         placeholder="Enter main topic (e.g., lipstick)"
-        style={{ width: '280px', marginRight: '1rem' }}
+        className="ts-input"
       />
-      <button className="btn" onClick={handleSuggest} disabled={!mainTopic || loading} style={{ minWidth: '180px' }}>
+      <button className="btn ts-suggest-btn" onClick={handleSuggest} disabled={!mainTopic || loading}>
         {loading ? 'Suggesting...' : 'Suggest Related Topics'}
       </button>
       {loading && (
-        <div style={{ marginTop: '2.5rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'center' }}>
-          <span className="loader-spinner" style={{
-            display: 'inline-block',
-            width: '32px',
-            height: '32px',
-            border: '4px solid #4285F4',
-            borderTop: '4px solid #22242c',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-          }}></span>
+        <div className="ts-loader-wrap">
+          <span className="loader-spinner"></span>
         </div>
       )}
-      {error && <div style={{ color: 'red', marginTop: '1rem' }}>{error}</div>}
+  {error && <div className="ts-error">{error}</div>}
       {relatedTopics.length > 0 ? (
-        <div style={{ marginTop: '1rem', overflowX: 'auto' }}>
+        <div className="ts-related-wrap">
           <h3>Related Topics</h3>
-          <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
+          <div className="ts-count">
             Related topics count: {relatedTopics.length}
           </div>
-          <table className="kw-table" style={{ width: '100%', borderCollapse: 'collapse', background: 'var(--color-surface)' }}>
+          <table className="kw-table ts-table">
             <thead>
               <tr>
                 <th style={{ textAlign: 'left', padding: '0.5rem 1rem' }}>
@@ -135,7 +128,7 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
                     type="checkbox"
                     checked={selectedTopics.length === sortedTopics.length && sortedTopics.length > 0}
                     indeterminate={selectedTopics.length > 0 && selectedTopics.length < sortedTopics.length ? "true" : undefined}
-                    style={{ width: 15, height: 15, marginRight: '0.5rem' }}
+                    className="ts-checkbox"
                     onChange={e => {
                       if (e.target.checked) {
                         const next = sortedTopics.map(t => t.keyword);
@@ -148,14 +141,14 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
                     }}
                   />
                 </th>
-                <th style={{ cursor: 'pointer', textAlign: 'left', paddingLeft: 0 }} onClick={() => handleSort('keyword')}>
+                <th className="ts-th-topic" onClick={() => handleSort('keyword')}>
                     Topic {sortBy === 'keyword' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                 </th>
-                <th style={{ cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('volume')}>
+                <th className="ts-th-center" onClick={() => handleSort('volume')}>
                   Search Volume {sortBy === 'volume' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                 </th>
 
-                <th style={{ cursor: 'pointer', textAlign: 'center', width: 40 }} onClick={() => handleSort('kd')}>
+                <th className="ts-th-kd" onClick={() => handleSort('kd')}>
                   KD {sortBy === 'kd' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                 </th>
 
@@ -169,7 +162,7 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
                     <input
                       type="checkbox"
                       checked={selectedTopics.includes(item.keyword)}
-                      style={{ width: 15, height: 15, marginRight: '0.5rem' }}
+                      className="ts-checkbox"
                       onClick={e => {
                         if (e.shiftKey && lastCheckedIndexRef.current !== null) {
                           const start = Math.min(lastCheckedIndexRef.current, idx);
@@ -198,21 +191,21 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
                       onChange={() => {}}
                     />
                   </td>
-                  <td style={{ padding: '0.5rem 1rem 0.5rem 0' }}>{item.keyword}</td>
-                  <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>{item.volume.toLocaleString()}</td>
-                  <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>{item.kd !== null && item.kd !== undefined ? item.kd : '-'}</td>
+                  <td className="ts-td-topic">{item.keyword}</td>
+                  <td className="ts-td-center">{item.volume.toLocaleString()}</td>
+                  <td className="ts-td-center">{item.kd !== null && item.kd !== undefined ? item.kd : '-'}</td>
                   {/* Removed per-row Select button */}
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={4} style={{ textAlign: 'left', padding: '0.5rem 0 0.5rem 16px' }}>
+                <td colSpan={4} className="ts-footer-cell">
                   <input
                     type="checkbox"
                     checked={selectedTopics.length === sortedTopics.length && sortedTopics.length > 0}
                     indeterminate={selectedTopics.length > 0 && selectedTopics.length < sortedTopics.length ? "true" : undefined}
-                    style={{ width: 15, height: 15, marginRight: '1rem' }}
+                    className="ts-checkbox"
                     onChange={e => {
                       if (e.target.checked) {
                         const next = sortedTopics.map(t => t.keyword);
@@ -231,7 +224,7 @@ const TopicSelector = ({ keywords, onTopicSelected, onRelatedTopics }) => {
           </table>
         </div>
       ) : (!loading && mainTopic && (
-        <div style={{ marginTop: '2rem', color: '#aaa', fontStyle: 'italic', textAlign: 'center' }}>
+        <div className="ts-empty">
           No related topics found
         </div>
       ))}
