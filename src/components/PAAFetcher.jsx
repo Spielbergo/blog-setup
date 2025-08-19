@@ -60,7 +60,8 @@ const PAAFetcher = ({ topic }) => {
   const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [prefilteredPAAs, setPrefilteredPAAs] = useState([]);
+  const [prefilteredPAAs, setPrefilteredPAAs] = useState([]); // single-topic or flattened manual list
+  const [prefilteredByTopic, setPrefilteredByTopic] = useState({}); // raw results per topic before filtering
   // Export confirmation modal
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportDetails, setExportDetails] = useState(null);
@@ -75,6 +76,7 @@ const PAAFetcher = ({ topic }) => {
     setLoading(true);
     setError('');
     let allResults = {};
+  let preMap = {};
     try {
       // 1. Fetch blog titles once
       let blogTitles = [];
@@ -107,7 +109,9 @@ const PAAFetcher = ({ topic }) => {
           continue;
         }
         if (!res.ok) continue;
-        let paaList = data.questions || [];
+  let paaList = data.questions || [];
+  // Capture raw, prefiltered PAA list for this topic
+  preMap[topicItem] = Array.isArray(paaList) ? paaList.slice() : [];
         // Filter against blog titles
         let filteredPAAs = paaList.filter(paa => {
           const normPAA = normalize(paa);
@@ -149,10 +153,19 @@ const PAAFetcher = ({ topic }) => {
         allResults[topicItem] = filteredPAAs;
       }
       setPaaQuestions(allResults);
-      setPrefilteredPAAs([]); // not used in multi
+      setPrefilteredByTopic(preMap);
+      // For single-topic, store array for convenience; for multi, flatten for modal fallback
+      if (multiTopics.length === 1) {
+        const only = multiTopics[0];
+        setPrefilteredPAAs(preMap[only] || []);
+      } else {
+        setPrefilteredPAAs(Object.values(preMap).flat());
+      }
     } catch (err) {
       setError('Error fetching PAA questions. Is the backend running?');
       setPaaQuestions({});
+      setPrefilteredByTopic({});
+      setPrefilteredPAAs([]);
     }
     setLoading(false);
   }; // end fetchPAAQuestions
@@ -160,7 +173,9 @@ const PAAFetcher = ({ topic }) => {
   const handleInputChange = e => {
     setInputText(e.target.value);
     const questions = e.target.value.split('\n').map(q => q.trim()).filter(Boolean);
-    setPaaQuestions(questions);
+  setPaaQuestions(questions);
+  setPrefilteredPAAs(questions);
+  setPrefilteredByTopic(questions.length ? { Manual: questions } : {});
   };
 
   // Deduplicate questions
@@ -997,9 +1012,13 @@ const PAAFetcher = ({ topic }) => {
       ) : null}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Full Prefiltered PAA List">
         <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
-          Unfiltered PAA count: {multiTopics.length > 1 && typeof paaQuestions === 'object'
-            ? Object.values(paaQuestions).reduce((acc, arr) => acc + arr.length, 0)
-            : prefilteredPAAs.length}
+          {(() => {
+            if (multiTopics.length > 1) {
+              const total = Object.values(prefilteredByTopic || {}).reduce((acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0), 0);
+              return <>Unfiltered PAA count: {total}</>;
+            }
+            return <>Unfiltered PAA count: {prefilteredPAAs.length}</>;
+          })()}
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', background: '#222', color: '#fff', marginBottom: '2rem' }}>
           <thead>
@@ -1008,8 +1027,8 @@ const PAAFetcher = ({ topic }) => {
             </tr>
           </thead>
           <tbody>
-            {(multiTopics.length > 1 && typeof paaQuestions === 'object'
-              ? Object.values(paaQuestions).flat()
+            {(multiTopics.length > 1
+              ? Object.values(prefilteredByTopic || {}).flat()
               : prefilteredPAAs
             ).map((q, idx) => (
               <tr key={'prefiltered-' + idx}>
