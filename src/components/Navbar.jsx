@@ -94,7 +94,7 @@ const Navbar = () => {
 
   return (
     <div className="navbar">
-      <div className="navbar-title">Blog Silo Setup Tool <span style={{ fontSize: '0.8rem', color: '#aaa', fontWeight: 'normal' }}>1. Make sure server is running &nbsp; 2. Sign in only needed to WRITE to Google Sheets</span></div>
+      <div className="navbar-title">Blog Silo Setup Tool <span style={{ fontSize: '0.8rem', color: '#aaa', fontWeight: 'normal' }}>1. Make sure server is running (for PAA Fetch) &nbsp; 2. Sign in only needed to WRITE to Google Sheets</span></div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
         <button
           className="navbar-btn"

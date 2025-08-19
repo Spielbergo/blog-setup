@@ -917,7 +917,7 @@ const PAAFetcher = ({ topic }) => {
                   <thead>
                     <tr>
                       <th style={{ borderBottom: '1px solid #444', padding: '0.5rem', textAlign: 'left' }}>PAA Question</th>
-                      <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>Mini Silo Keyword</th>
+                      <th style={{ borderBottom: '1px solid #444', padding: '0.5rem', textAlign: 'left' }}>Mini Silo Keyword</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -959,7 +959,7 @@ const PAAFetcher = ({ topic }) => {
                 <thead>
                   <tr>
                     <th style={{ borderBottom: '1px solid #444', padding: '0.5rem', textAlign: 'left' }}>PAA Question</th>
-                    <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>Silo Keyword</th>
+                    <th style={{ borderBottom: '1px solid #444', padding: '0.5rem', textAlign: 'left' }}>Silo Keyword</th>
                   </tr>
                 </thead>
                 <tbody>
