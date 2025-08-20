@@ -65,6 +65,7 @@ const PAAFetcher = ({ topic }) => {
   const [prefilteredCopied, setPrefilteredCopied] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastText, setToastText] = useState('');
+  const [filterMode, setFilterMode] = useState('Default'); // 'Relaxed' | 'Default' | 'Aggressive'
   // Export confirmation modal
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportDetails, setExportDetails] = useState(null);
@@ -563,17 +564,34 @@ const PAAFetcher = ({ topic }) => {
 
   function hasBestOrTopRated(q) {
     const s = normalizeText(q);
-  // Only filter very explicit "best" style queries (avoid over-filtering)
-  if (/\bwhat (is|are) the best\b/.test(s)) return true;
-  if (/\b(top 10|top10|highest rated)\b/.test(s)) return true;
-  // Do not broadly filter on 'best' or 'top rated' to avoid removing useful queries
+    // Behavior varies by filterMode
+    if (filterMode === 'Aggressive') {
+      if (/\bwhat (is|are) the best\b/.test(s)) return true;
+      if (/\b(best|top rated|top-rated|top 10|top10|highest rated)\b/.test(s)) return true;
+      if (/\bmost popular\b/.test(s)) return true;
+      return true;
+    }
+    if (filterMode === 'Default') {
+      // Moderate: filter explicit 'what is the best' and clear top-10 style markers
+      if (/\bwhat (is|are) the best\b/.test(s)) return true;
+      if (/\b(top 10|top10|highest rated)\b/.test(s)) return true;
+      return false;
+    }
+    // Relaxed: only filter explicit top-list markers
+    if (/\b(top 10|top10|highest rated)\b/.test(s)) return true;
     return false;
   }
 
   function isTrendQuestion(q) {
     const s = normalizeText(q);
-  // Narrow trend detection to explicit trending indicators to avoid false positives
-  return /\b(trend|trending|hottest|in \d{4})\b/.test(s);
+    if (filterMode === 'Aggressive') {
+      return /\b(trend|trending|right now|current|hottest|biggest trend|in \d{4})\b/.test(s);
+    }
+    if (filterMode === 'Default') {
+      return /\b(trend|trending|hottest|in \d{4})\b/.test(s);
+    }
+    // Relaxed: only filter explicit year-based trend markers
+    return /\bin \d{4}\b/.test(s);
   }
 
   function isAttractionPreference(q) {
@@ -632,9 +650,15 @@ const PAAFetcher = ({ topic }) => {
   function applyCustomFiltersForTopic(topicItem, list) {
     const core = topicCoreTokens(topicItem);
     let arr = (list || []).filter(q => !hasBestOrTopRated(q) && !isTrendQuestion(q) && !isAttractionPreference(q));
-    // Be more permissive: accept a question if it contains any core token (not all)
+    // Token enforcement varies by mode
     if (core.length > 0) {
-      arr = arr.filter(q => questionContainsAnyToken(q, core));
+      if (filterMode === 'Aggressive') {
+        arr = arr.filter(q => questionContainsAllTokens(q, core));
+      } else if (filterMode === 'Default') {
+        arr = arr.filter(q => questionContainsAnyToken(q, core));
+      } else {
+        // Relaxed: skip token enforcement to keep more questions
+      }
     }
     const seen = new Set();
     const unique = [];
@@ -863,6 +887,64 @@ const PAAFetcher = ({ topic }) => {
           />
         </label>
       </div>
+      <div style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <label>
+          Filter Strictness:
+          <select value={filterMode} onChange={e => setFilterMode(e.target.value)}>
+            <option value="Relaxed">Relaxed</option>
+            <option value="Default">Default</option>
+            <option value="Aggressive">Aggressive</option>
+          </select>
+        </label>
+        <div style={{ color: '#aaa', marginTop: 29 }}>
+          {(() => {
+            // Exact live counts based on fetched/pasted prefiltered arrays and grouping/dedupe
+            const raw = Array.isArray(multiTopics) && multiTopics.length > 1
+              ? Object.values(prefilteredByTopic || {}).flat()
+              : prefilteredPAAs;
+            const preCount = (raw || []).length;
+            let postCount = 0;
+            let perTopic = null;
+            try {
+              if (Array.isArray(multiTopics) && multiTopics.length > 1 && typeof paaQuestions === 'object') {
+                perTopic = multiTopics.map(t => {
+                  const arr = paaQuestions[t] || [];
+                  const { flattened } = buildGroupsAndBands(arr, t);
+                  return { topic: t, pre: (prefilteredByTopic[t] || []).length, post: (flattened || []).length };
+                });
+                postCount = perTopic.reduce((s, p) => s + (p.post || 0), 0);
+              } else if (Array.isArray(paaQuestions)) {
+                // manual paste or array form
+                const baseTopic = Array.isArray(topic) ? (topic[0] || '') : (topic || '');
+                const { flattened } = buildGroupsAndBands(paaQuestions, baseTopic);
+                postCount = (flattened || []).length;
+              } else if (typeof paaQuestions === 'object' && Array.isArray(multiTopics) && multiTopics.length === 1) {
+                const only = multiTopics[0];
+                const arr = paaQuestions[only] || [];
+                const { flattened } = buildGroupsAndBands(arr, only);
+                postCount = (flattened || []).length;
+              } else {
+                // Fallback: use dedupedQuestions grouping
+                const base = Array.isArray(topic) ? (topic[0] || '') : (topic || '');
+                const { flattened } = buildGroupsAndBands(dedupedQuestions, base);
+                postCount = (flattened || []).length;
+              }
+            } catch (err) {
+              postCount = 0;
+            }
+            return (
+              <div>
+                <div>Prefiltered: {preCount} → After rules: {postCount}</div>
+                {perTopic && perTopic.length > 0 && (
+                  <div style={{ marginTop: '4px', color: '#bbb' }}>
+                    {perTopic.map(p => (<span key={p.topic} style={{ marginRight: '10px' }}>{p.topic}: {p.pre} → {p.post}</span>))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      </div>
       <div>
         <button onClick={fetchPAAQuestions} disabled={loading || !topic}>
           {loading ? 'Fetching...' : `Fetch PAA for "${topic}"`}
@@ -881,9 +963,9 @@ const PAAFetcher = ({ topic }) => {
         <button onClick={downloadCSV}>
           Download CSV
         </button>
-        <label>
+        <label style={{ display: 'flex', alignItems: 'center', width: '64%' }}>
           Google Sheet:
-          <select value={selectedSheet} onChange={e => setSelectedSheet(e.target.value)} style={{ marginLeft: '0.5rem' }}>
+          <select value={selectedSheet} onChange={e => setSelectedSheet(e.target.value)} style={{ marginLeft: '0.5rem', width: '60%', marginTop: 0 }}>
             {sheets.map(sheet => (
               <option key={sheet.id} value={sheet.id}>{sheet.title}</option>
             ))}
