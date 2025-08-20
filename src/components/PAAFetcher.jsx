@@ -519,13 +519,34 @@ const PAAFetcher = ({ topic }) => {
     return { keys, groups, flattened, bands };
   }
 
-  function toTitleCase(s) {
-    return String(s || '')
-      .toLowerCase()
-      .split(/\s+/)
-      .map(w => w ? (w[0].toUpperCase() + w.slice(1)) : '')
-      .join(' ')
-      .trim();
+  // Chicago-style Title Case
+  function toTitleCase(str) {
+    if (!str) return '';
+    // Articles, FANBOYS, short prepositions (≤4 letters)
+    const smallWords = new Set([
+      'a','an','the','and','but','or','for','nor','so','yet',
+      'at','by','in','of','off','on','out','per','to','up','via','with','from','over','into','onto','upon','than','as','if','vs','amid','among','around','before','after','along','down','near','past','plus','save','till','upon','within','without','like','next','off','once','onto','over','than','till','upon','with','within','without'
+    ]);
+    // Pronouns always capitalized
+    const alwaysCap = new Set([
+      'i','me','my','you','your','he','him','his','she','her','it','its','we','us','our','they','them','their'
+    ]);
+    // Split by space, preserve punctuation
+    const words = String(str).trim().split(/\s+/);
+    return words.map((word, i) => {
+      const w = word.replace(/[^\w'-]/g, '');
+      const lower = w.toLowerCase();
+      // Always capitalize first and last word
+      if (i === 0 || i === words.length - 1) return capitalize(word);
+      // Capitalize if not a small word, or if alwaysCap
+      if (!smallWords.has(lower) || alwaysCap.has(lower)) return capitalize(word);
+      // Otherwise, lowercase
+      return word.toLowerCase();
+    }).join(' ').replace(/\s+/g, ' ').trim();
+    function capitalize(w) {
+      if (!w) return '';
+      return w[0].toUpperCase() + w.slice(1);
+    }
   }
 
   // ===== Custom filtering helpers =====
@@ -577,8 +598,11 @@ const PAAFetcher = ({ topic }) => {
   }
 
   function canonicalizeForDedup(q) {
+    // Lowercase, remove punctuation and collapse spaces
     let s = ' ' + normalizeText(q) + ' ';
+    // Remove common filler/modifier words (preserve 'actually' and auxiliaries)
     s = s
+      .replace(/\b(really|just|simply|literally|seriously)\b/g, ' ')
       .replace(/\bis it (ok|okay|good) to\b/g, ' to ')
       .replace(/\bis it (ok|okay|good)\b/g, ' ')
       .replace(/\bshould (i|you)\b/g, ' ')
@@ -587,12 +611,38 @@ const PAAFetcher = ({ topic }) => {
       .replace(/\bapply\b/g, ' use ')
       .replace(/\bput\b/g, ' use ')
       .replace(/\beveryday\b/g, ' every day ')
-      .replace(/\bon (my|your) lips\b/g, ' on lips ')
-      .replace(/\b(for|on) (my|your) lips\b/g, ' for lips ')
+      .replace(/\bon (my|your) lips\b/g, ' on lip ')
+      .replace(/\b(for|on) (my|your) lips\b/g, ' for lip ')
       .replace(/\b(okay|ok)\b/g, ' good ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    return s;
+  .replace(/\s+/g, ' ')
+  .trim();
+
+  // Quick explicit replacements for words likely to vary in these PAAs
+    s = s
+      .replace(/\boils\b/g, 'oil')
+      .replace(/\boils?\b/g, 'oil')
+      .replace(/\blips\b/g, 'lip')
+      .replace(/\blips?\b/g, 'lip')
+      .replace(/\bbalms\b/g, 'balm')
+      .replace(/\bglosses\b/g, 'gloss')
+      .replace(/\btips\b/g, 'tip')
+      .replace(/\bmethods\b/g, 'method')
+      .replace(/\beffects\b/g, 'effect')
+      .replace(/\badvantages\b/g, 'advantage')
+      .replace(/\bdisadvantages\b/g, 'disadvantage')
+      .replace(/\bhealthier\b/g, 'health')
+      .replace(/\bbetter than\b/g, 'better-than')
+      .replace(/\bbest\b/g, 'best')
+      .replace(/\bwhat are\b/g, 'what')
+      .replace(/\bwhat is\b/g, 'what');
+
+    // Remove any leftover non-alphanumeric characters and collapse spaces
+    s = s.replace(/[^a-z0-9\s-]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  // Keep tokens in original order but remove duplicates (preserve phrasing)
+  const tokens = s.split(' ').filter(Boolean);
+  const uniq = tokens.filter((t, i) => tokens.indexOf(t) === i);
+  return uniq.join(' ');
   }
 
   function applyCustomFiltersForTopic(topicItem, list) {
