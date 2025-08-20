@@ -563,15 +563,17 @@ const PAAFetcher = ({ topic }) => {
 
   function hasBestOrTopRated(q) {
     const s = normalizeText(q);
-    if (/\bwhat (is|are) the best\b/.test(s)) return true;
-    if (/\b(best|top rated|top-rated|top 10|top10|highest rated)\b/.test(s)) return true;
-    if (/\bmost popular\b/.test(s)) return true;
+  // Only filter very explicit "best" style queries (avoid over-filtering)
+  if (/\bwhat (is|are) the best\b/.test(s)) return true;
+  if (/\b(top 10|top10|highest rated)\b/.test(s)) return true;
+  // Do not broadly filter on 'best' or 'top rated' to avoid removing useful queries
     return false;
   }
 
   function isTrendQuestion(q) {
     const s = normalizeText(q);
-    return /\b(trend|trending|right now|current|hottest|biggest trend|in \d{4})\b/.test(s);
+  // Narrow trend detection to explicit trending indicators to avoid false positives
+  return /\b(trend|trending|hottest|in \d{4})\b/.test(s);
   }
 
   function isAttractionPreference(q) {
@@ -630,8 +632,9 @@ const PAAFetcher = ({ topic }) => {
   function applyCustomFiltersForTopic(topicItem, list) {
     const core = topicCoreTokens(topicItem);
     let arr = (list || []).filter(q => !hasBestOrTopRated(q) && !isTrendQuestion(q) && !isAttractionPreference(q));
+    // Be more permissive: accept a question if it contains any core token (not all)
     if (core.length > 0) {
-      arr = arr.filter(q => questionContainsAllTokens(q, core));
+      arr = arr.filter(q => questionContainsAnyToken(q, core));
     }
     const seen = new Set();
     const unique = [];
