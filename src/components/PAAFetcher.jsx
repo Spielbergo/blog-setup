@@ -62,6 +62,9 @@ const PAAFetcher = ({ topic }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [prefilteredPAAs, setPrefilteredPAAs] = useState([]); // single-topic or flattened manual list
   const [prefilteredByTopic, setPrefilteredByTopic] = useState({}); // raw results per topic before filtering
+  const [prefilteredCopied, setPrefilteredCopied] = useState(false);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastText, setToastText] = useState('');
   // Export confirmation modal
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportDetails, setExportDetails] = useState(null);
@@ -597,52 +600,31 @@ const PAAFetcher = ({ topic }) => {
     });
   }
 
-  function canonicalizeForDedup(q) {
-    // Lowercase, remove punctuation and collapse spaces
-    let s = ' ' + normalizeText(q) + ' ';
-    // Remove common filler/modifier words (preserve 'actually' and auxiliaries)
-    s = s
-      .replace(/\b(really|just|simply|literally|seriously)\b/g, ' ')
-      .replace(/\bis it (ok|okay|good) to\b/g, ' to ')
-      .replace(/\bis it (ok|okay|good)\b/g, ' ')
-      .replace(/\bshould (i|you)\b/g, ' ')
-      .replace(/\bcan (i|you)\b/g, ' ')
-      .replace(/\bdo (i|you) need\b/g, ' need ')
-      .replace(/\bapply\b/g, ' use ')
-      .replace(/\bput\b/g, ' use ')
-      .replace(/\beveryday\b/g, ' every day ')
-      .replace(/\bon (my|your) lips\b/g, ' on lip ')
-      .replace(/\b(for|on) (my|your) lips\b/g, ' for lip ')
-      .replace(/\b(okay|ok)\b/g, ' good ')
-  .replace(/\s+/g, ' ')
-  .trim();
+  // Accept if any core token is present (less strict than 'all')
+  function questionContainsAnyToken(q, tokens) {
+    if (!tokens || tokens.length === 0) return true;
+    const s = ' ' + normalizeText(q) + ' ';
+    return tokens.some(tok => {
+      if (!tok || tok.length < 2) return false;
+      const re = new RegExp(`\\b${tok}(s)?\\b`, 'i');
+      return re.test(s);
+    });
+  }
 
-  // Quick explicit replacements for words likely to vary in these PAAs
+  function canonicalizeForDedup(q) {
+    // Simpler normalization: lowercase, remove punctuation, limited singularization
+    if (!q) return '';
+    let s = normalizeText(q);
+    // Simple singular/plural normalizations that collapse the common variants
     s = s
       .replace(/\boils\b/g, 'oil')
       .replace(/\boils?\b/g, 'oil')
-      .replace(/\blips\b/g, 'lip')
       .replace(/\blips?\b/g, 'lip')
-      .replace(/\bbalms\b/g, 'balm')
-      .replace(/\bglosses\b/g, 'gloss')
-      .replace(/\btips\b/g, 'tip')
-      .replace(/\bmethods\b/g, 'method')
-      .replace(/\beffects\b/g, 'effect')
-      .replace(/\badvantages\b/g, 'advantage')
-      .replace(/\bdisadvantages\b/g, 'disadvantage')
-      .replace(/\bhealthier\b/g, 'health')
-      .replace(/\bbetter than\b/g, 'better-than')
-      .replace(/\bbest\b/g, 'best')
-      .replace(/\bwhat are\b/g, 'what')
-      .replace(/\bwhat is\b/g, 'what');
-
-    // Remove any leftover non-alphanumeric characters and collapse spaces
-    s = s.replace(/[^a-z0-9\s-]/g, ' ').replace(/\s+/g, ' ').trim();
-
-  // Keep tokens in original order but remove duplicates (preserve phrasing)
-  const tokens = s.split(' ').filter(Boolean);
-  const uniq = tokens.filter((t, i) => tokens.indexOf(t) === i);
-  return uniq.join(' ');
+      .replace(/\bbalms?\b/g, 'balm')
+      .replace(/\bglosses?\b/g, 'gloss')
+      .replace(/\btips?\b/g, 'tip');
+    // Collapse whitespace and return normalized phrase (preserve word order)
+    return s.replace(/\s+/g, ' ').trim();
   }
 
   function applyCustomFiltersForTopic(topicItem, list) {
@@ -731,6 +713,31 @@ const PAAFetcher = ({ topic }) => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  // Small helper to download an arbitrary list as CSV
+  function downloadListAsCSV(list, filename = 'prefiltered_paas.csv') {
+    if (!Array.isArray(list) || list.length === 0) return;
+    let csv = 'PAA Question (Prefiltered)\r\n';
+    list.forEach(q => {
+      const clean = String(q || '').replace(/\"/g, '""').replace(/\r|\n/g, ' ');
+      csv += `"${clean}"\r\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function showToast(text) {
+    setToastText(text || 'Done');
+    setToastVisible(true);
+    setTimeout(() => setToastVisible(false), 1500);
   }
 
   const writeOne = async (tabTitle, questions) => {
@@ -1061,7 +1068,7 @@ const PAAFetcher = ({ topic }) => {
         </div>
       ) : null}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Full Prefiltered PAA List">
-        <div style={{ marginBottom: '0.5rem', color: '#aaa' }}>
+        <div style={{ marginBottom: '0.5rem', color: '#aaa', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           {(() => {
             if (multiTopics.length > 1) {
               const total = Object.values(prefilteredByTopic || {}).reduce((acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0), 0);
@@ -1069,24 +1076,86 @@ const PAAFetcher = ({ topic }) => {
             }
             return <>Unfiltered PAA count: {prefilteredPAAs.length}</>;
           })()}
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button
+              onClick={() => {
+                const list = multiTopics.length > 1 ? Object.values(prefilteredByTopic || {}).flat() : prefilteredPAAs;
+                if (!list || list.length === 0) return;
+                const text = list.map(q => q.replace(/^\*\s*/, '')).join('\n');
+                navigator.clipboard.writeText(text).then(() => {
+                  setPrefilteredCopied(true);
+                  showToast('Copied all prefiltered PAAs');
+                  setTimeout(() => setPrefilteredCopied(false), 1500);
+                }).catch(() => {
+                  // ignore clipboard errors
+                });
+              }}
+              disabled={((multiTopics.length > 1 ? Object.values(prefilteredByTopic || {}).flat() : prefilteredPAAs) || []).length === 0}
+            >
+              {prefilteredCopied ? 'Copied!' : 'Copy All'}
+            </button>
+            <button
+              onClick={() => {
+                const list = multiTopics.length > 1 ? Object.values(prefilteredByTopic || {}).flat() : prefilteredPAAs;
+                if (!list || list.length === 0) return;
+                downloadListAsCSV(list, 'prefiltered_paas.csv');
+                showToast('CSV downloaded');
+              }}
+              disabled={((multiTopics.length > 1 ? Object.values(prefilteredByTopic || {}).flat() : prefilteredPAAs) || []).length === 0}
+            >
+              Download CSV
+            </button>
+          </div>
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', background: '#222', color: '#fff', marginBottom: '2rem' }}>
           <thead>
             <tr>
-              <th style={{ borderBottom: '1px solid #444', padding: '0.5rem' }}>PAA Question (Prefiltered)</th>
+              <th style={{ borderBottom: '1px solid #444', padding: '0.5rem', textAlign: 'left' }}>PAA Question (Prefiltered)</th>
             </tr>
           </thead>
           <tbody>
             {(multiTopics.length > 1
-              ? Object.values(prefilteredByTopic || {}).flat()
-              : prefilteredPAAs
-            ).map((q, idx) => (
-              <tr key={'prefiltered-' + idx}>
-                <td style={{ borderBottom: '1px solid #333', padding: '0.5rem' }}>{q.replace(/^\*\s*/, '')}</td>
-              </tr>
+              ? Object.entries(prefilteredByTopic || {})
+              : [['', prefilteredPAAs]]
+            ).map(([t, arr], outerIdx) => (
+              Array.isArray(arr) ? (
+                arr.map((q, idx) => (
+                  <tr key={'prefiltered-' + outerIdx + '-' + idx}>
+                    <td style={{ borderBottom: '1px solid #333', padding: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ flex: 1 }}>{q.replace(/^\*\s*/, '')}</span>
+                      {/* Per-topic controls shown at the end of the group via outerIdx, render once per topic header row */}
+                    </td>
+                  </tr>
+                ))
+              ) : null
             ))}
           </tbody>
         </table>
+        {/* Per-topic control list for multi-topic mode */}
+        {multiTopics.length > 1 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {multiTopics.map((t, i) => {
+              const list = prefilteredByTopic[t] || [];
+              return (
+                <div key={`pt-${i}`} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <strong style={{ minWidth: '180px' }}>{t}</strong>
+                  <button disabled={!list || list.length === 0} onClick={() => {
+                    const text = (list || []).map(q => q.replace(/^\*\s*/, '')).join('\n');
+                    navigator.clipboard.writeText(text).then(() => showToast(`Copied ${t} prefiltered PAAs`));
+                  }}>Copy</button>
+                  <button disabled={!list || list.length === 0} onClick={() => { downloadListAsCSV(list, `${sanitizeTabTitle(t)}_prefiltered.csv`); showToast(`Downloaded ${t} CSV`); }}>Download CSV</button>
+                  <div style={{ color: '#aaa', marginLeft: 'auto' }}>{list.length} items</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {/* Toast */}
+        {toastVisible && (
+          <div style={{ position: 'fixed', right: 20, bottom: 20, background: '#333', color: '#fff', padding: '10px 14px', borderRadius: '6px', boxShadow: '0 6px 18px rgba(0,0,0,0.3)', zIndex: 9999 }}>
+            {toastText}
+          </div>
+        )}
       </Modal>
       {/* Export confirmation modal */}
       <Modal open={exportModalOpen} onClose={() => setExportModalOpen(false)} title="Export complete">
