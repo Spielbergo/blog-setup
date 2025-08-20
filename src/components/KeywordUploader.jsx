@@ -20,7 +20,7 @@ function parseKeywords(text) {
     .filter(Boolean);
 }
 
-const KeywordUploader = ({ onKeywordsParsed }) => {
+const KeywordUploader = ({ onKeywordsParsed, onManualEntry }) => {
   const [inputText, setInputText] = useState('');
   const [keywords, setKeywords] = useState([]);
   const [showKeywords, setShowKeywords] = useState(false);
@@ -81,6 +81,9 @@ const KeywordUploader = ({ onKeywordsParsed }) => {
       />
       <button className="btn" style={{ margin: '1rem 0' }} onClick={() => setShowKeywords(v => !v)}>
         {showKeywords ? 'Hide' : 'Show'} Parsed Keywords ({keywords.length})
+      </button>
+      <button className="btn" style={{ margin: '0 0 1rem 1rem' }} onClick={() => onManualEntry && onManualEntry()}>
+        Manual Topic Entry
       </button>
       {showKeywords && (
         <div>

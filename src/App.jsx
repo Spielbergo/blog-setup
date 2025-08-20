@@ -10,6 +10,7 @@ import './styles.css'; // Assuming you have a styles.css for global styles
 function App() {
   const [keywords, setKeywords] = useState([]);
   const [selectedTopic, setSelectedTopic] = useState('');
+  const [manualTopicMode, setManualTopicMode] = useState(false);
   const [isAuthed, setIsAuthed] = useState(() => {
     return localStorage.getItem('minion_authed') === 'true';
   });
@@ -86,17 +87,17 @@ function App() {
         <section className="dashboard-col">
           <h2>Step 1: Upload Keywords</h2>
           <div className="card">
-            <KeywordUploader onKeywordsParsed={setKeywords} />
+            <KeywordUploader onKeywordsParsed={setKeywords} onManualEntry={() => setManualTopicMode(true)} />
           </div>
         </section>
         {/* Column 2: Select topic */}
         <section className="dashboard-col">
           <h2>Step 2: Select Topic</h2>
           <div className="card">
-            {keywords.length > 0 ? (
+            {(keywords.length > 0 || manualTopicMode) ? (
               <TopicSelector keywords={keywords} onTopicSelected={setSelectedTopic} />
             ) : (
-              <p style={{ color: '#888', fontSize: '1.1rem' }}>Upload keywords to enable topic selection.</p>
+              <p style={{ color: '#888', fontSize: '1.1rem' }}>Upload keywords or use manual entry to enable topic selection.</p>
             )}
           </div>
         </section>
