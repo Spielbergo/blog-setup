@@ -200,42 +200,55 @@ const PAAFetcher = ({ topic }) => {
   const lastBrandFilterInputRef = useRef('');
   useEffect(() => {
     async function filterBrandsCelebs() {
-      if (!geminiApiKey || dedupedQuestionsRaw.length === 0) {
-        if (JSON.stringify(filteredQuestions) !== JSON.stringify(dedupedQuestionsRaw)) {
-          setFilteredQuestions(dedupedQuestionsRaw);
-        }
+      if (dedupedQuestionsRaw.length === 0) {
+        setFilteredQuestions(dedupedQuestionsRaw);
         return;
       }
       const joined = dedupedQuestionsRaw.join('\n');
       if (joined === lastBrandFilterInputRef.current) return;
       lastBrandFilterInputRef.current = joined;
-      try {
-        const genAI = new GoogleGenerativeAI(geminiApiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-        const prompt = `Here is a list of questions about ${topic}. Return only the questions that do NOT mention any brand names or celebrities.\nQuestions:\n${dedupedQuestionsRaw.join('\n')}`;
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
-        // Try to extract questions from Gemini response
-        const filtered = text.split(/\n|\r/).map(q => q.trim()).filter(Boolean);
-        // Only use filtered if it looks like a list of questions
-        if (filtered.length > 0 && filtered.every(q => q.endsWith('?'))) {
-          if (JSON.stringify(filteredQuestions) !== JSON.stringify(filtered)) {
+
+      // Local heuristic fallback
+      function localFilter(list) {
+        const celebWords = /\b(celebrity|celeb|celebs|star|actor|actress|singer|rapper|model|influencer|youtuber|instagram|instagrammer|tiktok)\b/i;
+        const whoIsPattern = /\bwho is [A-Z][a-z]+(?: [A-Z][a-z]+)?\b/;
+        const twoProperNouns = /\b[A-Z][a-z]{2,} [A-Z][a-z]{2,}\b/;
+        return (list || []).filter(q => {
+          try {
+            if (celebWords.test(q)) return false;
+            if (whoIsPattern.test(q)) return false;
+            if (twoProperNouns.test(q)) return false;
+            return true;
+          } catch (_) {
+            return true;
+          }
+        });
+      }
+
+      // Try Gemini first when available
+      if (geminiApiKey) {
+        try {
+          const genAI = new GoogleGenerativeAI(geminiApiKey);
+          const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+          const prompt = `Here is a list of questions about ${topic}. Return only the questions that do NOT mention any brand names or celebrities. Questions:\n${dedupedQuestionsRaw.join('\n')}`;
+          const result = await model.generateContent(prompt);
+          const text = result.response.text();
+          const filtered = text.split(/\n|\r/).map(q => q.trim()).filter(Boolean);
+          if (filtered.length > 0 && filtered.every(q => q.endsWith('?'))) {
             setFilteredQuestions(filtered);
+            return;
           }
-        } else {
-          if (JSON.stringify(filteredQuestions) !== JSON.stringify(dedupedQuestionsRaw)) {
-            setFilteredQuestions(dedupedQuestionsRaw);
-          }
-        }
-      } catch (err) {
-        if (JSON.stringify(filteredQuestions) !== JSON.stringify(dedupedQuestionsRaw)) {
-          setFilteredQuestions(dedupedQuestionsRaw);
+        } catch (err) {
+          // Gemini failed, fall back to local
         }
       }
+
+      const localFiltered = localFilter(dedupedQuestionsRaw);
+      setFilteredQuestions(localFiltered);
     }
     filterBrandsCelebs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dedupedQuestionsRaw, geminiApiKey, topic, filteredQuestions]);
+  }, [dedupedQuestionsRaw, geminiApiKey, topic]);
 
   // Use filteredQuestions for grouping
   const dedupedQuestions = filteredQuestions.map(q => toTitleCase(String(q || '').replace(/^\*\s*/, '')));
