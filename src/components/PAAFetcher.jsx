@@ -65,52 +65,10 @@ const PAAFetcher = ({ topic }) => {
   const [prefilteredCopied, setPrefilteredCopied] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastText, setToastText] = useState('');
-  const [filterMode, setFilterMode] = useState(() => {
-    try {
-      return localStorage.getItem('paaFilterMode') || 'Default';
-    } catch (_) {
-      return 'Default';
-    }
-  }); // 'Relaxed' | 'Default' | 'Aggressive'
+  const [filterMode, setFilterMode] = useState('Default'); // 'Relaxed' | 'Default' | 'Aggressive'
   // Export confirmation modal
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportDetails, setExportDetails] = useState(null);
-  const [geminiRunning, setGeminiRunning] = useState(false);
-  const [geminiAppliedTopics, setGeminiAppliedTopics] = useState({});
-
-  // Persist filter mode to localStorage when changed
-  useEffect(() => {
-    try {
-      localStorage.setItem('paaFilterMode', filterMode);
-    } catch (_) {}
-  }, [filterMode]);
-
-  // Recompute paaQuestions from prefilteredByTopic when filterMode changes so toggling modes
-  // only re-process locally and does not call the API again.
-  useEffect(() => {
-    // If we don't have prefilteredByTopic, nothing to do
-    if (!prefilteredByTopic || Object.keys(prefilteredByTopic).length === 0) return;
-    const recomputed = {};
-    Object.entries(prefilteredByTopic).forEach(([t, arr]) => {
-      try {
-        // Apply custom filters using current filterMode
-        const filtered = applyCustomFiltersForTopic(t, arr || []);
-        // Note: do not call Gemini here — keep it local and quick
-        recomputed[t] = filtered.map(q => toTitleCase(q.replace(/^\*\s*/, '')));
-      } catch (err) {
-        recomputed[t] = (arr || []).map(q => toTitleCase(String(q || '').replace(/^\*\s*/, '')));
-      }
-    });
-    setPaaQuestions(recomputed);
-    // Update flattened prefilteredPAAs for single-topic convenience
-    if (multiTopics.length === 1) {
-      const only = multiTopics[0];
-      setPrefilteredPAAs(prefilteredByTopic[only] || []);
-    } else {
-      setPrefilteredPAAs(Object.values(prefilteredByTopic).flat());
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterMode, JSON.stringify(prefilteredByTopic)]);
 
   // Call Express API for PAA questions
   const fetchPAAQuestions = async () => {
@@ -743,50 +701,6 @@ const PAAFetcher = ({ topic }) => {
     }
   }
 
-  // Run Gemini dedupe/cleanup on the current prefiltered lists without calling SerpAPI
-  async function runGeminiCleanup() {
-    if (!geminiApiKey) {
-      showToast('No Gemini key configured');
-      return;
-    }
-    // Determine source lists to process
-    const source = (typeof paaQuestions === 'object' && !Array.isArray(paaQuestions) && Object.keys(paaQuestions).length > 0)
-      ? paaQuestions
-      : (prefilteredByTopic && Object.keys(prefilteredByTopic).length > 0)
-        ? prefilteredByTopic
-        : (Array.isArray(paaQuestions) ? { Manual: paaQuestions } : {});
-    if (!source || Object.keys(source).length === 0) {
-      showToast('No prefetched PAAs to process');
-      return;
-    }
-    setGeminiRunning(true);
-    const updated = { ...paaQuestions };
-    const applied = { ...geminiAppliedTopics };
-    try {
-      for (const [t, arr] of Object.entries(source)) {
-        const list = Array.isArray(arr) ? arr.filter(Boolean) : [];
-        if (list.length < 2) {
-          applied[t] = false;
-          continue;
-        }
-        try {
-          const deduped = await geminiDedupeSimilar(list, t, geminiApiKey);
-          updated[t] = (deduped || []).map(q => toTitleCase(String(q || '').replace(/^\*\s*/, '')));
-          applied[t] = true;
-        } catch (err) {
-          applied[t] = false;
-        }
-      }
-      setPaaQuestions(updated);
-      setGeminiAppliedTopics(applied);
-      showToast('Gemini dedupe complete');
-    } catch (err) {
-      showToast('Gemini error');
-    } finally {
-      setGeminiRunning(false);
-    }
-  }
-
   // Export to Gemini for deduping and grouping, then update local state
   async function exportAndGroupToGemini(questions, topic) {
     if (!geminiApiKey || questions.length < 2) return questions;
@@ -1048,9 +962,6 @@ const PAAFetcher = ({ topic }) => {
       <div style={{ margin: '1rem 0', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
         <button onClick={downloadCSV}>
           Download CSV
-        </button>
-        <button onClick={runGeminiCleanup} disabled={!geminiApiKey || geminiRunning}>
-          {geminiRunning ? 'Running Gemini...' : 'Run Gemini Dedupe'}
         </button>
         <label style={{ display: 'flex', alignItems: 'center', width: '64%' }}>
           Google Sheet:
